@@ -28,7 +28,7 @@ todoist_api_env = str(os.getenv("TODOIST_API", "")).strip()
 TODOIST_API_TOKEN = todoist_api_env
 
 # Define o nome base dos diretórios dos bots (facilita mudanças futuras)
-BOT_BASE_DIR_NAME = "colabtools"
+BOT_BASE_DIR_NAME = "gepeto"
 BOT_ZIP_FILE_NAME = f"{BOT_BASE_DIR_NAME}-main.zip"
 
 #==============================================================
