@@ -988,11 +988,7 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
             
             # Mensagem diferente para reinicialização
             if is_restart:
-                DISCORD_WEBHOOK_LOG = discord_webhook_log_env
-                BOT_ACC = bot_acc_env
-                send_discord_log_message(BOT_ACC, f"Reiniciando Bot {bot_letter} após erro crítico...", DISCORD_WEBHOOK_LOG)
                 print_colored('Sistema', f"Reiniciando Bot {bot_letter} após erro crítico...", is_warning=True)
-
             else:
                 print_colored('Sistema', f"Iniciando Bot {bot_letter} agora...")
             
@@ -1038,6 +1034,7 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
                 try:
                     no_output_counter = 0
                     start_time = time.time()
+                    last_critical_error = None  # Armazenar o último erro crítico detectado
                     
                     # Registrar o PID do processo principal
                     if process.pid:
@@ -1082,8 +1079,15 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
                             no_output_counter = 0
                             
                             # Verificar se a linha contém algum dos padrões de erro crítico
-                            if any(pattern in line for pattern in critical_error_patterns):
-                                print_colored('Sistema', f"Detectado erro crítico no Bot {bot_letter}. Preparando para reiniciar...", is_error=True)
+                            critical_error_found = None
+                            for pattern in critical_error_patterns:
+                                if pattern in line:
+                                    critical_error_found = pattern
+                                    last_critical_error = line.strip()  # Capturar a linha completa do erro
+                                    break
+                            
+                            if critical_error_found:
+                                print_colored('Sistema', f"Detectado erro crítico no Bot {bot_letter}: {critical_error_found}", is_error=True)
                                 
                                 # Verificar se não está em processo de desligamento antes de tentar reiniciar
                                 if not is_shutdown_requested:
@@ -1091,6 +1095,14 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
                                         time.sleep(10)
                                         restart_counts[bot_letter] += 1
                                         print_colored('Sistema', f"Tentativa de reinicialização {restart_counts[bot_letter]}/{max_restarts} para Bot {bot_letter}", is_warning=True)
+                                        
+                                        # Enviar mensagem para Discord com detalhes do erro
+                                        DISCORD_WEBHOOK_LOG = discord_webhook_log_env
+                                        BOT_ACC = bot_acc_env
+                                        error_message = f"Reiniciando Bot {bot_letter} após erro crítico: {critical_error_found}"
+                                        if last_critical_error:
+                                            error_message += f" - Linha completa: {last_critical_error[:100]}..."  # Limitar tamanho
+                                        send_discord_log_message(BOT_ACC, error_message, DISCORD_WEBHOOK_LOG)
                                         
                                         # Encerrar o processo atual
                                         process.terminate()
@@ -1305,10 +1317,10 @@ def stop_space(HF_TOKEN, SPACE_REPO_ID):
     api = HfApi(token=HF_TOKEN)
     print(f"🛑 Desligando o Space: {SPACE_REPO_ID}")
     try:
-        api.pause_space(repo_id=SPACE_REPO_ID)
-        print("Space pausado com sucesso.")
+        api.delete_repo(repo_id=SPACE_REPO_ID, repo_type="space")
+        print("Space deletado com sucesso.")
     except Exception as e:
-        print(f"Erro ao pausar o Space: {e}")
+        print(f"Erro ao deletar o Space: {e}")
 
 
 #TODOIST FUNCTIONS
