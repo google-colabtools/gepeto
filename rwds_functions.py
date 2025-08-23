@@ -1100,8 +1100,6 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
                                         DISCORD_WEBHOOK_LOG = discord_webhook_log_env
                                         BOT_ACC = bot_acc_env
                                         error_message = f"Reiniciando Bot {bot_letter} após erro crítico: {critical_error_found}"
-                                        if last_critical_error:
-                                            error_message += f" - Linha completa: {last_critical_error[:100]}..."  # Limitar tamanho
                                         send_discord_log_message(BOT_ACC, error_message, DISCORD_WEBHOOK_LOG)
                                         
                                         # Encerrar o processo atual
