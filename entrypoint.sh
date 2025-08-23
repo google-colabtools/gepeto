@@ -14,13 +14,13 @@ squid -N &
 # Aguarda o Squid responder na porta 3128
 SQUID_TIMEOUT=10
 SQUID_COUNTER=0
-while ! nc -z 127.0.0.1 3128 && [ $SQUID_COUNTER -lt $SQUID_TIMEOUT ]; do
+while ! nc -z 127.0.0.1 3128 2>/dev/null && [ $SQUID_COUNTER -lt $SQUID_TIMEOUT ]; do
     echo "Waiting for squid... ($SQUID_COUNTER/$SQUID_TIMEOUT)"
     sleep 1
     SQUID_COUNTER=$((SQUID_COUNTER + 1))
 done
 
-if ! nc -z 127.0.0.1 3128; then
+if ! nc -z 127.0.0.1 3128 2>/dev/null; then
     echo "Error: Squid not responding on port 3128 after $SQUID_TIMEOUT seconds"
     exit 1
 fi
