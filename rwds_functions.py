@@ -421,6 +421,47 @@ def check_location():
     except requests.RequestException as e:
         raise RuntimeError(f"Failed to retrieve location information for IP: {ip}") from e
 
+def get_current_ip():
+    """
+    Função para verificar o IP atual usando apenas bibliotecas padrão
+    Tenta múltiplos serviços para garantir confiabilidade
+    """
+    import urllib.request
+    import json
+    
+    try:
+        # Tenta obter o IP de diferentes serviços
+        services = [
+            "https://api.ipify.org?format=json",
+            "https://httpbin.org/ip",
+            "https://jsonip.com"
+        ]
+        
+        for service in services:
+            try:
+                with urllib.request.urlopen(service, timeout=10) as response:
+                    data = json.loads(response.read().decode())
+                    
+                    # Extrai o IP baseado na estrutura de resposta de cada serviço
+                    if 'ip' in data:
+                        current_ip = data['ip']
+                    elif 'origin' in data:
+                        current_ip = data['origin']
+                    else:
+                        continue
+                    
+                    print(f"🌐 IP atual: {current_ip}")
+                    return current_ip
+            except Exception:
+                continue
+        
+        print("❌ Não foi possível obter o IP de nenhum serviço")
+        return None
+        
+    except Exception as e:
+        print(f"❌ Erro ao verificar IP: {e}")
+        return None
+
 def setup_ricronus_and_directories(BOT_DIRECTORY):
     """Configura o ricronus e cria os diretórios necessários"""
     curl_with_proxy_fallback(f"{BOT_DIRECTORY}r_rewards.conf", f"{BASEDIR}/ricronus.conf")
@@ -1320,6 +1361,16 @@ def stop_space(HF_TOKEN, SPACE_REPO_ID):
     except Exception as e:
         print(f"Erro ao deletar o Space: {e}")
 
+def restart_space(HF_TOKEN, SPACE_REPO_ID, factory_reboot=True):
+    api = HfApi(token=HF_TOKEN)
+    reboot_type = "factory reboot" if factory_reboot else "restart"
+    print(f"🔄 Reiniciando o Space ({reboot_type}): {SPACE_REPO_ID}")
+    try:
+        api.restart_space(repo_id=SPACE_REPO_ID, factory_reboot=factory_reboot)
+        print(f"Space reiniciado com sucesso ({reboot_type}).")
+    except Exception as e:
+        print(f"Erro ao reiniciar o Space: {e}")
+
 
 #TODOIST FUNCTIONS
 HEADERS = {
@@ -1327,41 +1378,57 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-def verificar_tarefa_concluida(nome_tarefa):
+def verificar_tarefa_concluida(nome_tarefa, projeto_id=None):
     if not TODOIST_API_TOKEN:
         # Token não definido, apenas retorna como se não tivesse tarefa
         return False
     try:
-        response = requests.get("https://api.todoist.com/rest/v2/tasks", headers=HEADERS)
+        # Se projeto_id foi especificado, filtra por projeto
+        if projeto_id:
+            response = requests.get(f"https://api.todoist.com/rest/v2/tasks?project_id={projeto_id}", headers=HEADERS)
+        else:
+            response = requests.get("https://api.todoist.com/rest/v2/tasks", headers=HEADERS)
+            
         tarefas = response.json()
         for tarefa in tarefas:
             if tarefa["content"].lower() == nome_tarefa.lower():
-                print(f"[❌ A FAZER] Tarefa ainda ativa: {tarefa['content']}")
+                projeto_info = f" no projeto {projeto_id}" if projeto_id else ""
+                print(f"[❌ A FAZER] Tarefa ainda ativa{projeto_info}: {tarefa['content']}")
                 return False
-        print(f"[✅ CONCLUÍDA OU INEXISTENTE] '{nome_tarefa}' não está entre tarefas ativas.")
+        
+        projeto_info = f" no projeto {projeto_id}" if projeto_id else ""
+        print(f"[✅ CONCLUÍDA OU INEXISTENTE] '{nome_tarefa}' não está entre tarefas ativas{projeto_info}.")
         return True
     except Exception:
         # Falha silenciosa se não conseguir acessar a API
         return False
 
-def concluir_tarefa(nome_tarefa):
+def concluir_tarefa(nome_tarefa, projeto_id=None):
     if not TODOIST_API_TOKEN:
         # Token não definido, retorna silenciosamente
         return False
     try:
-        response = requests.get("https://api.todoist.com/rest/v2/tasks", headers=HEADERS)
+        # Se projeto_id foi especificado, filtra por projeto
+        if projeto_id:
+            response = requests.get(f"https://api.todoist.com/rest/v2/tasks?project_id={projeto_id}", headers=HEADERS)
+        else:
+            response = requests.get("https://api.todoist.com/rest/v2/tasks", headers=HEADERS)
+            
         tarefas = response.json()
         for tarefa in tarefas:
             if tarefa["content"].lower() == nome_tarefa.lower():
                 tarefa_id = tarefa["id"]
                 r = requests.post(f"https://api.todoist.com/rest/v2/tasks/{tarefa_id}/close", headers=HEADERS)
                 if r.status_code == 204:
-                    print(f"[✔️ CONCLUÍDA] Tarefa '{nome_tarefa}' concluída com sucesso.")
+                    projeto_info = f" no projeto {projeto_id}" if projeto_id else ""
+                    print(f"[✔️ CONCLUÍDA] Tarefa '{nome_tarefa}' concluída com sucesso{projeto_info}.")
                     return True
                 else:
                     print(f"[⚠️ ERRO] Falha ao concluir tarefa '{nome_tarefa}' - Status: {r.status_code}")
                     return False
-        print(f"[⚠️ NÃO ENCONTRADA] Tarefa '{nome_tarefa}' não encontrada entre ativas.")
+        
+        projeto_info = f" no projeto {projeto_id}" if projeto_id else ""
+        print(f"[⚠️ NÃO ENCONTRADA] Tarefa '{nome_tarefa}' não encontrada entre ativas{projeto_info}.")
         return False
     except Exception:
         # Falha silenciosa se não conseguir acessar a API
@@ -1372,19 +1439,27 @@ def criar_tarefa(nome_tarefa, projeto_id=None):
         # Token não definido, retorna silenciosamente
         return False
     try:
-        response = requests.get("https://api.todoist.com/rest/v2/tasks", headers=HEADERS)
+        # Se projeto_id foi especificado, filtra por projeto para verificar se já existe
+        if projeto_id:
+            response = requests.get(f"https://api.todoist.com/rest/v2/tasks?project_id={projeto_id}", headers=HEADERS)
+        else:
+            response = requests.get("https://api.todoist.com/rest/v2/tasks", headers=HEADERS)
+            
         tarefas = response.json()
         for tarefa in tarefas:
             if tarefa["content"].lower() == nome_tarefa.lower():
-                print(f"[⚠️ JÁ EXISTE] Tarefa '{nome_tarefa}' já existe e está ativa.")
+                projeto_info = f" no projeto {projeto_id}" if projeto_id else ""
+                print(f"[⚠️ JÁ EXISTE] Tarefa '{nome_tarefa}' já existe e está ativa{projeto_info}.")
                 return False
+                
         url = "https://api.todoist.com/rest/v2/tasks"
         payload = {"content": nome_tarefa}
         if projeto_id:
             payload["project_id"] = projeto_id
         response = requests.post(url, headers=HEADERS, json=payload)
         if response.status_code in (200, 204):
-            print(f"[✅ CRIADA] Tarefa '{nome_tarefa}' criada com sucesso.")
+            projeto_info = f" no projeto {projeto_id}" if projeto_id else ""
+            print(f"[✅ CRIADA] Tarefa '{nome_tarefa}' criada com sucesso{projeto_info}.")
             return True
         else:
             print(f"[⚠️ ERRO] Falha ao criar tarefa '{nome_tarefa}' - Status: {response.status_code}")

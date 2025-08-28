@@ -21,7 +21,7 @@ while ! nc -z 127.0.0.1 3128 2>/dev/null && [ $SQUID_COUNTER -lt $SQUID_TIMEOUT 
 done
 
 if ! nc -z 127.0.0.1 3128 2>/dev/null; then
-    echo "Error: Squid not responding on port 3128 after $SQUID_TIMEOUT seconds"
+    echo "Error: Squid not responding after $SQUID_TIMEOUT seconds"
     exit 1
 fi
 

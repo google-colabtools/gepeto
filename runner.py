@@ -48,9 +48,13 @@ def load_functions():
     return module
 
 rwds_functions = load_functions()
+current_ip = rwds_functions.get_current_ip()
 
 def run_bots():
     os.chdir(BASEDIR)
+
+    # Inicializar variável para controlar se a tarefa do IP foi criada
+    ip_task_created = False
 
     # Usar as variáveis carregadas do .env diretamente
     BOT_DIRECTORY = bot_directory_env
@@ -63,6 +67,27 @@ def run_bots():
     DISCORD_WEBHOOK_URL_US = discord_webhook_url_us_env
     SPACE_REPO_ID = space_repo_id_env
     HF_TOKEN = hf_token_env
+    
+    # Verificar IP duplicado apenas para DEFAULT_CONFIG_US
+    if CONFIG_MODE == "DEFAULT_CONFIG_US":
+        # Verificar se já existe uma tarefa com o nome do IP atual
+        
+        ip_task_exists = rwds_functions.verificar_tarefa_concluida(current_ip, "6cjh8V9GcVr6r4x7")
+
+        if ip_task_exists:
+            # Se a tarefa não existe (verificar_tarefa_concluida retorna True quando não existe), criar nova tarefa
+            print(f"📝 Criando tarefa para IP: {current_ip}")
+            rwds_functions.criar_tarefa(current_ip, "6cjh8V9GcVr6r4x7")
+            ip_task_created = True  # Marcar que a tarefa foi criada
+        else:
+            # Se a tarefa existe (verificar_tarefa_concluida retorna False quando existe), reiniciar space
+            print(f"🔄 Tarefa para IP {current_ip} já existe. Reiniciando Space...")
+            rwds_functions.send_discord_log_message(BOT_ACCOUNT, f"IP duplicado detectado ({current_ip}). Reiniciando Space...", DISCORD_WEBHOOK_URL_LOG)
+            rwds_functions.restart_space(HF_TOKEN, SPACE_REPO_ID, factory_reboot=True)
+            return  # Encerra a execução após reiniciar
+    else:
+        #print(f"ℹ️ Verificação de IP duplicado desabilitada para CONFIG_MODE: {CONFIG_MODE}")
+        ip_task_created = False  # Para outros modos, não criar tarefa do IP
 
 
     rwds_functions.send_discord_log_message(BOT_ACCOUNT, "Iniciando execução...", DISCORD_WEBHOOK_URL_LOG)
@@ -177,7 +202,10 @@ def run_bots():
             pass
         else:
             print("Concluindo tarefa...")
-            rwds_functions.concluir_tarefa(BOT_ACCOUNT)    
+            rwds_functions.concluir_tarefa(BOT_ACCOUNT) 
+            # Só concluir tarefa do IP se ela foi criada
+            if ip_task_created:
+                rwds_functions.concluir_tarefa(current_ip, "6cjh8V9GcVr6r4x7") 
         time.sleep(5)
         print("Fazendo upload de sessions para o google drive...")
         rwds_functions.upload_rewards_drive(BOT_ACCOUNT)
