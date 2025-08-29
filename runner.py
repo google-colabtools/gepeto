@@ -69,7 +69,7 @@ def run_bots():
     HF_TOKEN = hf_token_env
     
     # Verificar IP duplicado apenas para DEFAULT_CONFIG_US
-    if CONFIG_MODE == "DEFAULT_CONFIG_US":
+    if CONFIG_MODE == "DISABLED_DEFAULT_CONFIG_US":
         # Verificar se já existe uma tarefa com o nome do IP atual
         
         ip_task_exists = rwds_functions.verificar_tarefa_concluida(current_ip, "6cjh8V9GcVr6r4x7")
