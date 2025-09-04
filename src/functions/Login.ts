@@ -473,11 +473,6 @@ export class Login {
         let currentUrl = new URL(page.url())
         let code: string
         // After any login step where the button may appear, add:
-        const skipButton = await page.$('button[data-testid="secondaryButton"]');
-        if (skipButton) {
-            await skipButton.click();
-            this.bot.log(this.bot.isMobile, 'LOGIN-APP', '"Skip for now" button clicked successfully');
-        }
         this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'Waiting for authorization...')
         // eslint-disable-next-line no-constant-condition
         while (true) {
