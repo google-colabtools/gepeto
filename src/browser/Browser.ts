@@ -32,7 +32,7 @@ class Browser {
         const getBrowserPath = () => {
         const thoriumPath = process.env.THORIUM_BIN;
         const chromePath = process.env.CHROME_BIN;
-        const fallbackPath = '/usr/bin/thorium-browser';
+        const fallbackPath = '/usr/bin/chromium';
 
         if (thoriumPath && fs.existsSync(thoriumPath)) {
             console.log(`Usando THORIUM_BIN: ${thoriumPath}`);

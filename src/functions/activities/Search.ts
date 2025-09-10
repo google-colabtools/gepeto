@@ -19,6 +19,7 @@ type GoogleTrendsResponse = [
 export class Search extends Workers {
     private bingHome = 'https://bing.com'
     private searchPageURL = ''
+    private firstScroll: boolean = true;
 
     public async doSearch(page: Page, data: DashboardData) {
         this.bot.log(this.bot.isMobile, 'SEARCH-BING', 'Starting Bing searches')
@@ -141,7 +142,8 @@ export class Search extends Workers {
 
     private async bingSearch(searchPage: Page, query: string) {
         const platformControlKey = platform() === 'darwin' ? 'Meta' : 'Control'
-
+        // Initialize search content for each search
+        this.firstScroll = true
         // Try a max of 5 times
         for (let i = 0; i < 5; i++) {
             try {
@@ -153,20 +155,27 @@ export class Search extends Workers {
                     window.scrollTo(0, 0)
                 })
 
-                await this.bot.utils.wait(500)
+                await this.bot.utils.wait(this.bot.utils.randomNumber(500, 2000))
 
                 const searchBar = '#sb_form_q'
                 await searchPage.waitForSelector(searchBar, { state: 'visible', timeout: 10000 })
-                await searchPage.click(searchBar) // Focus on the textarea
-                await this.bot.utils.wait(500)
+                // Simulate mouse movement to search bar and hover before clicking
+                await searchPage.hover(searchBar);
+                await this.bot.utils.wait(this.bot.utils.randomNumber(200, 500)); // Hover pause
+                await searchPage.click(searchBar); // Focus on the textarea
+                await this.bot.utils.wait(this.bot.utils.randomNumber(500, 2000))
                 await searchPage.keyboard.down(platformControlKey)
                 await searchPage.keyboard.press('A')
                 await searchPage.keyboard.press('Backspace')
                 await searchPage.keyboard.up(platformControlKey)
-                await searchPage.keyboard.type(query)
+                // Simulate human typing speed, adding random pauses between each character
+                for (const char of query) {
+                    await searchPage.keyboard.type(char);
+                    await this.bot.utils.wait(this.bot.utils.randomNumber(50, 200)); // 50-200ms random pause
+                }
                 await searchPage.keyboard.press('Enter')
 
-                await this.bot.utils.wait(3000)
+                await this.bot.utils.wait(this.bot.utils.randomNumber(3000, 5000))
 
                 // Bing.com in Chrome opens a new tab when searching
                 const resultPage = await this.bot.browser.utils.getLatestTab(searchPage)
@@ -175,14 +184,26 @@ export class Search extends Workers {
                 await this.bot.browser.utils.reloadBadPage(resultPage)
                 await this.bot.browser.utils.tryDismissAllMessages(resultPage)
 
-                if (this.bot.config.searchSettings.scrollRandomResults) {
-                    await this.bot.utils.wait(2000)
-                    await this.randomScroll(resultPage)
-                }
+                // Randomly loop 1-3 times to perform scroll and click operations
+                const loopCount = this.bot.utils.randomNumber(1, 3);
+                this.bot.log(this.bot.isMobile, 'SEARCH-BING', `Starting ${loopCount} random scroll and click loops`);
+                for (let i = 0; i < loopCount; i++) {
+                    if (this.bot.config.searchSettings.scrollRandomResults) {
+                        await this.bot.utils.wait(this.bot.utils.randomNumber(2000, 4000))
+                        await this.humanLikeScroll(resultPage)
+                    }
 
-                if (this.bot.config.searchSettings.clickRandomResults) {
-                    await this.bot.utils.wait(2000)
-                    await this.clickRandomLink(resultPage)
+                    const clickProbability = this.bot.utils.randomNumber(1, 100);
+                    // 70% probability to click
+                    if (this.bot.config.searchSettings.clickRandomResults && clickProbability <= 70) {
+                        await this.bot.utils.wait(this.bot.utils.randomNumber(2000, 4000))
+                        await this.clickRandomLink(resultPage)
+                    }
+
+                    // Add random wait between loops (no wait after last loop)
+                    if (i < loopCount - 1) {
+                        await this.bot.utils.wait(this.bot.utils.randomNumber(2000, 5000))
+                    }
                 }
 
                 // Delay between searches
@@ -209,7 +230,7 @@ export class Search extends Workers {
                 const lastTab = await this.bot.browser.utils.getLatestTab(searchPage)
                 await this.closeTabs(lastTab)
 
-                await this.bot.utils.wait(4000)
+                await this.bot.utils.wait(this.bot.utils.randomNumber(4000, 7000))
             }
         }
 
@@ -295,30 +316,185 @@ export class Search extends Workers {
         return []
     }
 
-    private async randomScroll(page: Page) {
-        try {
-            const viewportHeight = await page.evaluate(() => window.innerHeight)
-            const totalHeight = await page.evaluate(() => document.body.scrollHeight)
-            const randomScrollPosition = Math.floor(Math.random() * (totalHeight - viewportHeight))
+   /**
+     * Simulate human scrolling behavior, including acceleration, deceleration, and random pauses
+     * @param page - Current page object
+     */
+    private async humanLikeScroll(page: Page) {
+        // Get current scroll position and page height
+        const [currentY, scrollHeight, windowHeight] = await Promise.all([
+            page.evaluate(() => window.scrollY),
+            page.evaluate(() => document.body.scrollHeight),
+            page.evaluate(() => window.innerHeight)
+        ]);
+        const maxScroll = scrollHeight - windowHeight;
 
-            await page.evaluate((scrollPos) => {
-                window.scrollTo(0, scrollPos)
-            }, randomScrollPosition)
-
-        } catch (error) {
-            this.bot.log(this.bot.isMobile, 'SEARCH-RANDOM-SCROLL', 'An error occurred:' + error, 'error')
+        // Set scroll parameters based on device type
+        let scrollParams;
+        if (this.bot.isMobile) {
+            // Mobile device parameters: simulate touch swipe
+            scrollParams = {
+                minOffset: 200,
+                maxOffset: 500,
+                minDuration: 2000,
+                maxDuration: 4000,
+                minPause: 1000,
+                maxPause: 3000,
+                segments: 1 // Single scroll
+            };
+        } else {
+            // Desktop device parameters: simulate mouse wheel segmented scrolling
+            scrollParams = {
+                minOffset: 50,
+                maxOffset: 150,
+                minDuration: 500,
+                maxDuration: 1500,
+                minPause: 500,
+                maxPause: 1000,
+                segments: this.bot.utils.randomNumber(2, 4) // 2-4 segment scrolling
+            };
         }
+
+        // Calculate scroll offset, first scroll must be downward
+        let offset;
+        if (this.firstScroll) {
+            // First scroll downward
+            offset = this.bot.utils.randomNumber(scrollParams.minOffset, scrollParams.maxOffset);
+            this.firstScroll = false;
+        } else {
+            // Random up/down scrolling
+            if (Math.random() < 0.7) { // 70% probability to generate larger absolute values
+                if (Math.random() < 0.5) {
+                    offset = this.bot.utils.randomNumber(-scrollParams.maxOffset, -scrollParams.minOffset);
+                } else {
+                    offset = this.bot.utils.randomNumber(scrollParams.minOffset, scrollParams.maxOffset);
+                }
+            } else { // 30% probability to generate middle range values
+                offset = this.bot.utils.randomNumber(-scrollParams.minOffset, scrollParams.minOffset);
+            }
+        }
+        
+        // Calculate target position, ensure within valid range
+        // Execute different scrolling strategies based on device type
+        if (!this.bot.isMobile && scrollParams.segments > 1) {
+            let remainingOffset = offset;
+            let currentPosition = currentY;
+            
+            for (let i = 0; i < scrollParams.segments; i++) {
+                // Calculate offset for each segment, handle remaining part in last segment
+                const segmentOffset = i < scrollParams.segments - 1 
+                    ? Math.floor(remainingOffset / (scrollParams.segments - i))
+                    : remainingOffset;
+                
+                const targetPosition = Math.max(0, Math.min(currentPosition + segmentOffset, maxScroll));
+                const duration = this.bot.utils.randomNumber(scrollParams.minDuration, scrollParams.maxDuration);
+                const startTime = Date.now();
+
+                await page.evaluate(({ currentPosition, targetPosition, duration, startTime }: { currentPosition: number, targetPosition: number, duration: number, startTime: number }) => {
+                    return new Promise<void>(resolve => {
+                        const animateScroll = () => {
+                            const elapsed = Date.now() - startTime;
+                            const progress = Math.min(elapsed / duration, 1);
+                            
+                            // Use easeInOutQuad easing function
+                            const easeProgress = progress < 0.5 
+                                ? 2 * progress * progress 
+                                : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+                            
+                            const currentScroll = currentPosition + (targetPosition - currentPosition) * easeProgress;
+                            window.scrollTo(0, currentScroll);
+                            
+                            if (progress < 1) {
+                                requestAnimationFrame(animateScroll);
+                            } else {
+                                resolve();
+                            }
+                        };
+                        
+                        animateScroll();
+                    });
+                }, { currentPosition, targetPosition, duration, startTime });
+
+                // Update current position and remaining offset
+                currentPosition = targetPosition;
+                remainingOffset -= segmentOffset;
+
+                // Pause between segments (no pause after last segment)
+                if (i < scrollParams.segments - 1) {
+                    await this.bot.utils.wait(this.bot.utils.randomNumber(scrollParams.minPause, scrollParams.maxPause));
+                }
+            }
+        } else {
+            // Single scroll (mobile device or desktop single segment scrolling)
+            const targetPosition = Math.max(0, Math.min(currentY + offset, maxScroll));
+            const duration = this.bot.utils.randomNumber(scrollParams.minDuration, scrollParams.maxDuration);
+            const startTime = Date.now();
+
+            await page.evaluate(({ currentY, targetPosition, duration, startTime }: { currentY: number, targetPosition: number, duration: number, startTime: number }) => {
+                return new Promise<void>(resolve => {
+                    const animateScroll = () => {
+                        const elapsed = Date.now() - startTime;
+                        const progress = Math.min(elapsed / duration, 1);
+                        
+                        // Use easeInOutQuad easing function
+                        const easeProgress = progress < 0.5 
+                            ? 2 * progress * progress 
+                            : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+                        
+                        const currentScroll = currentY + (targetPosition - currentY) * easeProgress;
+                        window.scrollTo(0, currentScroll);
+                        
+                        if (progress < 1) {
+                            requestAnimationFrame(animateScroll);
+                        } else {
+                            resolve();
+                        }
+                    };
+                    
+                    animateScroll();
+                });
+            }, { currentY, targetPosition, duration, startTime });
+        }
+
+        // Final pause
+        await this.bot.utils.wait(this.bot.utils.randomNumber(scrollParams.minPause, scrollParams.maxPause));
     }
 
     private async clickRandomLink(page: Page) {
         try {
-            await page.click('#b_results .b_algo h2', { timeout: 2000 }).catch(() => { }) // Since we don't really care if it did it or not
-
+            // Get title links in search results
+            const resultLinks = await page.locator('#b_results .b_algo h2').all();
+            // Filter visible links
+            const visibleLinks = [];
+            for (const link of resultLinks) {
+                if (await link.isVisible()) {
+                    visibleLinks.push(link);
+                }
+            }
+            if (visibleLinks.length <= 0) {
+                this.bot.log(this.bot.isMobile, 'SEARCH-BING', `No visible links`);
+                return
+            }
+            const randomLink = visibleLinks[this.bot.utils.randomNumber(0, visibleLinks.length - 1)];
+            if (randomLink) await randomLink.hover();
+            await this.bot.utils.wait(this.bot.utils.randomNumber(1000, 2000));
+            // Cancel hover
+            if (randomLink) await page.mouse.move(0, 0);
+            // 30% probability for hover only
+            const clickProbability = this.bot.utils.randomNumber(1, 100);
+            if (clickProbability <= 30) {
+                this.bot.log(this.bot.isMobile, 'SEARCH-BING', `Performing hover-only and returning (probability: ${clickProbability}%)`);
+                return
+            }
+            if (randomLink) {
+                await randomLink.click({ timeout: 2000 }).catch(() => { });
+            }
+            
             // Only used if the browser is not the edge browser (continue on Edge popup)
             await this.closeContinuePopup(page)
 
             // Stay for 10 seconds for page to load and "visit"
-            await this.bot.utils.wait(10000)
+            await this.bot.utils.wait(this.bot.utils.randomNumber(10000, 30000))
 
             // Will get current tab if no new one is created, this will always be the visited site or the result page if it failed to click
             let lastTab = await this.bot.browser.utils.getLatestTab(page)

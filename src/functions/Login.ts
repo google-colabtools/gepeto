@@ -472,7 +472,21 @@ export class Login {
 
         let currentUrl = new URL(page.url())
         let code: string
-        // After any login step where the button may appear, add:
+        
+        // Try to handle "Skip for now" button if it appears
+        try {
+            await this.bot.utils.wait(2000)
+            const skipButton = await page.$('button[data-testid="secondaryButton"]');
+            if (skipButton) {
+                await skipButton.click();
+                this.bot.log(this.bot.isMobile, 'LOGIN-APP', '"Skip for now" button clicked successfully');
+                await this.bot.utils.wait(3000)
+            }
+        } catch (error) {
+            // Ignore errors from skip button handling
+            this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Skip button handling failed (non-critical): ${error}`, 'warn');
+        }
+        
         this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'Waiting for authorization...')
         // eslint-disable-next-line no-constant-condition
         while (true) {

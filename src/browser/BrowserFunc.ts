@@ -51,7 +51,7 @@ export default class BrowserFunc {
                 try {
                     // If activities are found, exit the loop
                     await page.waitForSelector('#more-activities', { timeout: 10000 })
-                    this.bot.log(this.bot.isMobile, 'GO-HOME', 'Visited homepage successfully')
+                    this.bot.log(this.bot.isMobile, 'GO-HOME1', 'Visited homepage successfully')
                     break
 
                 } catch (error) {
@@ -68,7 +68,7 @@ export default class BrowserFunc {
                     // Increase timeout
                     await page.goto(this.bot.config.baseURL, { timeout: 120000, waitUntil: 'load' })
                 } else {
-                    this.bot.log(this.bot.isMobile, 'GO-HOME', 'Visited homepage successfully')
+                    this.bot.log(this.bot.isMobile, 'GO-HOME2', 'Visited homepage successfully')
                     break
                 }
 
