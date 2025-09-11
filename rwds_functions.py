@@ -206,6 +206,9 @@ bot_pids = {
 }
 is_shutdown_requested = False  # Nova variável global para controlar o estado de desligamento
 
+# Lista global para rastrear bots com contas banidas
+banned_bots = set()  # Conjunto para evitar duplicatas
+
 last_alerts = {}
 
 def clean_account_proxys(account_file):
@@ -356,7 +359,13 @@ def send_discord_redeem_alert(bot_letter, message, discord_webhook_url_br, disco
 
 def send_discord_suspension_alert(bot_letter, discord_webhook_url_br, discord_webhook_url_us):
     """Envia uma mensagem para o webhook do Discord quando uma conta é suspensa"""
+    global banned_bots
+    
     try:
+        # Adicionar o bot à lista de banidos
+        banned_bots.add(bot_letter)
+        print(f"🚫 Bot {bot_letter} adicionado à lista de contas banidas. Não será reiniciado automaticamente.")
+        
         # Tentar obter o email da conta do arquivo accounts.json
         email = "Unknown"
         session_profile = "Unknown"
@@ -943,7 +952,7 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
         discord_webhook_url_us: URL do webhook do Discord para US.
         *bots_to_run: Lista de letras dos bots a serem executados.
     """
-    global is_shutdown_requested  # Declarar uso da variável global
+    global is_shutdown_requested, banned_bots  # Declarar uso da variável global
     
     # Shutdown flag
     is_shutdown_requested = False
@@ -952,6 +961,26 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
 
     # Converte para maiúsculas para garantir consistência
     bots_to_run = [bot.upper() for bot in bots_to_run]
+    
+    # Verificar status de bots banidos
+    if banned_bots:
+        banned_in_request = [bot for bot in bots_to_run if bot in banned_bots]
+        if banned_in_request:
+            print(f"⚠️ Aviso: Os seguintes bots estão na lista de banidos e NÃO serão iniciados: {', '.join(banned_in_request)}")
+            # Filtrar bots banidos da lista de execução
+            bots_to_run = [bot for bot in bots_to_run if bot not in banned_bots]
+            if not bots_to_run:
+                print("❌ Todos os bots solicitados estão banidos. Nenhum bot será iniciado.")
+                return
+        
+        all_banned = ", ".join(sorted(banned_bots))
+        print(f"🚫 Bots atualmente banidos: {all_banned}")
+    else:
+        print("✅ Nenhum bot está atualmente banido.")
+    
+    if bots_to_run:
+        active_bots = ", ".join(bots_to_run)
+        print(f"🚀 Bots que serão iniciados: {active_bots}")
     
     # Dicionário com os comandos para cada bot
     commands = {
@@ -1018,6 +1047,11 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
     # Função para iniciar um bot com delay
     def start_delayed_bot(bot_letter, position, is_restart=False):
         try:
+            # Verificar se o bot está na lista de banidos antes de iniciar
+            if bot_letter in banned_bots:
+                print_colored('Sistema', f"Bot {bot_letter} está na lista de contas banidas. Não será iniciado.", is_error=True)
+                return False
+            
             # Se for uma reinicialização, não aplicar o delay inicial
             if not is_restart:
                 # Delay progressivo: 0 seg para o primeiro, 30 seg para o segundo, 60 seg para o terceiro, etc.
@@ -1130,6 +1164,11 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
                             if critical_error_found:
                                 print_colored('Sistema', f"Detectado erro crítico no Bot {bot_letter}: {critical_error_found}", is_error=True)
                                 
+                                # Verificar se o bot está na lista de banidos
+                                if bot_letter in banned_bots:
+                                    print_colored('Sistema', f"Bot {bot_letter} está na lista de contas banidas. Não será reiniciado.", is_error=True)
+                                    return
+                                
                                 # Verificar se não está em processo de desligamento antes de tentar reiniciar
                                 if not is_shutdown_requested:
                                     if restart_counts[bot_letter] < max_restarts:
@@ -1206,6 +1245,11 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
                         
                         # Tentar reiniciar se o bot encerrou com erro
                         if restart_counts[bot_letter] < max_restarts:
+                            # Verificar se o bot está na lista de banidos antes de reiniciar
+                            if bot_letter in banned_bots:
+                                print_colored('Sistema', f"Bot {bot_letter} está na lista de contas banidas. Não será reiniciado.", is_error=True)
+                                return
+                            
                             restart_counts[bot_letter] += 1
                             print_colored('Sistema', f"Tentativa de reinicialização {restart_counts[bot_letter]}/{max_restarts} para Bot {bot_letter} devido a código de saída {exit_code}", is_warning=True)
                             
@@ -1278,7 +1322,7 @@ def kill_all_bots():
     Encerra todos os bots e seus processos filhos de forma mais robusta,
     garantindo que não haja processos persistentes ou logs de execuções anteriores.
     """
-    global bot_pids, processes, restart_counts, is_shutdown_requested
+    global bot_pids, processes, restart_counts, is_shutdown_requested, banned_bots
     
     # Sinaliza que um desligamento foi solicitado
     is_shutdown_requested = True
@@ -1297,7 +1341,7 @@ def kill_all_bots():
             except Exception as e:
                 print(f"⚠️ Erro ao encerrar Bot {bot_letter} (PID {pid}): {str(e)}")
     
-    # Limpar a lista de PIDs e contadores de reinicialização
+    # Limpar a lista de PIDs, contadores de reinicialização e bots banidos
     bot_pids = {key: [] for key in bot_pids}
     processes = {}  # Limpar o dicionário de processos
     restart_counts = {
@@ -1307,6 +1351,8 @@ def kill_all_bots():
         'D': 0,
         'E': 0
     }  # Resetar os contadores de reinicialização
+    banned_bots.clear()  # Limpar a lista de bots banidos
+    print("🔄 Lista de contas banidas foi limpa. Todos os bots podem ser reiniciados novamente.")
     
     # Garantir que não haja processos zumbis ou órfãos relacionados aos bots
     # Usar SIGKILL (-9) para garantir encerramento forçado
