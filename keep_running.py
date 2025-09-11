@@ -119,13 +119,14 @@ FILE_EXPLORER_TEMPLATE = """
         .breadcrumbs a { color: #c7d0dc; }
         .breadcrumbs span { color: #777; margin: 0 5px; }
         form { margin-top: 20px; padding: 15px; background-color: #3a424d; border-radius: 8px; }
-        input[type="file"] { color: #c7d0dc; }
+        input[type="file"] { color: #c7d0dc; margin-bottom: 10px; width: 100%; }
         input[type="submit"] {
             background-color: #7ecfff; color: #23272e; border: none;
             padding: 8px 16px; border-radius: 5px; font-weight: 600; cursor: pointer;
             transition: background-color 0.3s;
         }
         input[type="submit"]:hover { background-color: #a2e0ff; }
+        .upload-info { font-size: 12px; color: #888; margin-top: 5px; }
         .item-actions { display: flex; gap: 10px; align-items: center; }
         .download-btn {
             background-color: #28a745; color: white; border: none;
@@ -134,7 +135,63 @@ FILE_EXPLORER_TEMPLATE = """
             transition: background-color 0.3s;
         }
         .download-btn:hover { background-color: #218838; }
+        .spoiler {
+            margin: 20px 0;
+            border: 1px solid #4f5b6a;
+            border-radius: 8px;
+            background-color: #3a424d;
+        }
+        .spoiler-header {
+            padding: 15px;
+            cursor: pointer;
+            background-color: #2c313c;
+            border-radius: 8px 8px 0 0;
+            user-select: none;
+            transition: background-color 0.3s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .spoiler-header:hover {
+            background-color: #343a47;
+        }
+        .spoiler-header h2 {
+            margin: 0;
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        .spoiler-arrow {
+            transition: transform 0.3s;
+            font-size: 16px;
+        }
+        .spoiler-arrow.open {
+            transform: rotate(90deg);
+        }
+        .spoiler-content {
+            padding: 0 15px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease, padding 0.3s ease;
+        }
+        .spoiler-content.open {
+            max-height: 500px;
+            padding: 15px;
+        }
     </style>
+    <script>
+        function toggleSpoiler(element) {
+            const content = element.nextElementSibling;
+            const arrow = element.querySelector('.spoiler-arrow');
+            
+            if (content.classList.contains('open')) {
+                content.classList.remove('open');
+                arrow.classList.remove('open');
+            } else {
+                content.classList.add('open');
+                arrow.classList.add('open');
+            }
+        }
+    </script>
 </head>
 <body>
     <div class="container">
@@ -146,11 +203,19 @@ FILE_EXPLORER_TEMPLATE = """
             {% endfor %}
         </div>
 
-        <h2>Upload de Arquivo</h2>
-        <form method="post" enctype="multipart/form-data">
-            <input type="file" name="file" required>
-            <input type="submit" value="Upload">
-        </form>
+        <div class="spoiler">
+            <div class="spoiler-header" onclick="toggleSpoiler(this)">
+                <h2>📤 Upload de Arquivos</h2>
+                <span class="spoiler-arrow">▶</span>
+            </div>
+            <div class="spoiler-content">
+                <form method="post" enctype="multipart/form-data">
+                    <input type="file" name="files" multiple required>
+                    <div class="upload-info">💡 Você pode selecionar múltiplos arquivos segurando Ctrl (Windows/Linux) ou Cmd (Mac)</div>
+                    <input type="submit" value="Upload">
+                </form>
+            </div>
+        </div>
 
         <h2>Diretórios</h2>
         <ul>
@@ -226,14 +291,22 @@ def file_explorer(subpath=''):
 
     if os.path.isdir(requested_path):
         if request.method == 'POST':
-            if 'file' not in request.files:
+            # Verifica se há arquivos no request
+            if 'files' not in request.files:
                 return redirect(request.url)
-            file = request.files['file']
-            if file.filename == '':
-                return redirect(request.url)
-            if file:
-                filename = secure_filename(file.filename)
-                file.save(os.path.join(requested_path, filename))
+            
+            files = request.files.getlist('files')
+            uploaded_count = 0
+            
+            for file in files:
+                if file and file.filename != '':
+                    filename = secure_filename(file.filename)
+                    if filename:  # Garante que o filename é válido
+                        file.save(os.path.join(requested_path, filename))
+                        uploaded_count += 1
+            
+            # Se pelo menos um arquivo foi enviado, redireciona
+            if uploaded_count > 0:
                 return redirect(url_for('file_explorer', subpath=subpath))
 
         items = sorted(os.listdir(requested_path), key=str.lower)
