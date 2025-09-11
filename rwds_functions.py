@@ -14,6 +14,10 @@ import dns.resolver, socket
 from urllib.parse import urlparse
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Lock global para sincronização de acesso ao dicionário processes
+processes_lock = threading.Lock()
+
 #===============================================================
 
 # Carrega o arquivo .env
@@ -1102,7 +1106,8 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
                 universal_newlines=True
             )
             
-            processes[bot_letter] = process
+            with processes_lock:
+                processes[bot_letter] = process
             
             # Função para monitorar a saída do processo
             def monitor_output(process, bot_letter):
@@ -1189,11 +1194,25 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
                                         except subprocess.TimeoutExpired:
                                             process.kill()
                                         
+                                        # Remover o processo antigo do dicionário
+                                        with processes_lock:
+                                            if bot_letter in processes:
+                                                del processes[bot_letter]
+                                        
                                         # Iniciar uma nova thread para reiniciar o bot após um breve delay
-                                        restart_thread = threading.Thread(
-                                            target=lambda: (time.sleep(10), start_delayed_bot(bot_letter, position, is_restart=True))
-                                        )
-                                        restart_thread.daemon = True
+                                        def restart_bot_wrapper():
+                                            time.sleep(10)
+                                            new_process = start_delayed_bot(bot_letter, position, is_restart=True)
+                                            if new_process:
+                                                # Adicionar o novo processo ao dicionário global
+                                                with processes_lock:
+                                                    processes[bot_letter] = new_process
+                                                print_colored('Sistema', f"Bot {bot_letter} reiniciado com sucesso.", is_success=True)
+                                            else:
+                                                print_colored('Sistema', f"Falha ao reiniciar Bot {bot_letter}.", is_error=True)
+                                        
+                                        restart_thread = threading.Thread(target=restart_bot_wrapper)
+                                        restart_thread.daemon = False  # Não daemon para não morrer com o programa principal
                                         restart_thread.start()
                                         return
                                     else:
@@ -1253,11 +1272,25 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
                             restart_counts[bot_letter] += 1
                             print_colored('Sistema', f"Tentativa de reinicialização {restart_counts[bot_letter]}/{max_restarts} para Bot {bot_letter} devido a código de saída {exit_code}", is_warning=True)
                             
+                            # Remover o processo antigo do dicionário
+                            with processes_lock:
+                                if bot_letter in processes:
+                                    del processes[bot_letter]
+                            
                             # Iniciar uma nova thread para reiniciar o bot após um breve delay
-                            restart_thread = threading.Thread(
-                                target=lambda: (time.sleep(10), start_delayed_bot(bot_letter, position, is_restart=True))
-                            )
-                            restart_thread.daemon = True
+                            def restart_bot_wrapper():
+                                time.sleep(10)
+                                new_process = start_delayed_bot(bot_letter, position, is_restart=True)
+                                if new_process:
+                                    # Adicionar o novo processo ao dicionário global
+                                    with processes_lock:
+                                        processes[bot_letter] = new_process
+                                    print_colored('Sistema', f"Bot {bot_letter} reiniciado com sucesso após código de saída {exit_code}.", is_success=True)
+                                else:
+                                    print_colored('Sistema', f"Falha ao reiniciar Bot {bot_letter} após código de saída {exit_code}.", is_error=True)
+                            
+                            restart_thread = threading.Thread(target=restart_bot_wrapper)
+                            restart_thread.daemon = False  # Não daemon para não morrer com o programa principal
                             restart_thread.start()
                         elif restart_counts[bot_letter] >= max_restarts:
                             print_colored('Sistema', f"Número máximo de reinicializações ({max_restarts}) atingido para Bot {bot_letter}. Não será reiniciado.", is_error=True)
@@ -1274,20 +1307,31 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
             time.sleep(5)
             if process.poll() is not None:
                 print_colored('Sistema', f"Bot {bot_letter} encerrou prematuramente com código {process.returncode}", is_error=True)
-                return False
+                # Remover do dicionário de processos se falhou
+                with processes_lock:
+                    if bot_letter in processes:
+                        del processes[bot_letter]
+                return None
                 
-            return True
+            return process  # Retornar o processo em vez de True
             
         except Exception as e:
             print_colored('Sistema', f"Erro ao iniciar Bot {bot_letter}: {str(e)}", is_error=True)
-            return False
+            return None
     
     # Resto da função permanece igual
     threads = []
     for i, bot_letter in enumerate(bots_to_run):
         if bot_letter in commands:
-            bot_thread = threading.Thread(target=start_delayed_bot, args=(bot_letter, i, False))
-            bot_thread.daemon = True
+            def start_initial_bot(bot_letter, position):
+                new_process = start_delayed_bot(bot_letter, position, is_restart=False)
+                if new_process:
+                    print_colored('Sistema', f"Bot {bot_letter} iniciado com sucesso.", is_success=True)
+                else:
+                    print_colored('Sistema', f"Falha ao iniciar Bot {bot_letter}.", is_error=True)
+            
+            bot_thread = threading.Thread(target=start_initial_bot, args=(bot_letter, i))
+            bot_thread.daemon = False  # Não daemon para não morrer com o programa principal
             bot_thread.start()
             threads.append(bot_thread)
         else:
@@ -1301,10 +1345,41 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
         if process.poll() is not None:
             print_colored('Sistema', f"Bot {bot_letter} encerrou prematuramente com código {process.returncode}", is_error=True)
     
-    # Manter o script em execução enquanto houver processos ativos
+    # Manter o script em execução enquanto houver processos ativos ou bots esperados
     try:
-        while any(p.poll() is None for p in processes.values()):
+        print_colored('Sistema', f"Monitorando {len(bots_to_run)} bot(s): {', '.join(bots_to_run)}")
+        last_status_check = time.time()
+        
+        while True:
+            # Verificar se ainda há processos ativos
+            with processes_lock:
+                active_processes = {k: v for k, v in processes.items() if v.poll() is None}
+            
+            # Log de status a cada 30 segundos
+            current_time = time.time()
+            if current_time - last_status_check >= 30:
+                if active_processes:
+                    active_bots = ", ".join(active_processes.keys())
+                    print_colored('Sistema', f"Status: {len(active_processes)} bot(s) ativo(s): {active_bots}")
+                else:
+                    print_colored('Sistema', "Status: Nenhum bot ativo no momento. Aguardando reinicializações...")
+                last_status_check = current_time
+            
+            # Se não há processos ativos e nenhum bot esperado pode ser reiniciado, encerrar
+            if not active_processes:
+                # Verificar se todos os bots atingiram o limite de reinicializações ou estão banidos
+                all_bots_finished = True
+                for bot in bots_to_run:
+                    if bot not in banned_bots and restart_counts[bot] < max_restarts:
+                        all_bots_finished = False
+                        break
+                
+                if all_bots_finished:
+                    print_colored('Sistema', "Todos os bots terminaram execução ou atingiram limites. Encerrando monitoramento.")
+                    break
+            
             time.sleep(1)
+            
     except KeyboardInterrupt:
         print_colored('Sistema', "Interrupção detectada. Encerrando bots...")
         for bot_letter, process in processes.items():
