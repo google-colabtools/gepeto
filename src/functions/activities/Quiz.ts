@@ -20,17 +20,33 @@ export class Quiz extends Workers {
             await this.bot.utils.wait(2000)
 
             let quizData = await this.bot.browser.func.getQuizData(page)
-            const questionsRemaining = quizData.maxQuestions - quizData.CorrectlyAnsweredQuestionCount // Amount of questions remaining
+            let questionsRemaining = quizData.maxQuestions - quizData.CorrectlyAnsweredQuestionCount // Amount of questions remaining
 
-            // All questions
-            for (let question = 0; question < questionsRemaining; question++) {
+            // All questions - Dynamic loop that checks completion status
+            while (questionsRemaining > 0) {
+                // Check if quiz is already completed before proceeding
+                const isCompleted = await this.bot.browser.func.checkQuizCompleted(page)
+                if (isCompleted) {
+                    this.bot.log(this.bot.isMobile, 'QUIZ', 'Quiz already completed, breaking loop')
+                    break
+                }
+
+                // Always refresh quiz data before each question to get current state
+                quizData = await this.bot.browser.func.getQuizData(page)
+                questionsRemaining = quizData.maxQuestions - quizData.CorrectlyAnsweredQuestionCount
+
+                // If no questions remaining, break
+                if (questionsRemaining === 0) {
+                    this.bot.log(this.bot.isMobile, 'QUIZ', 'All questions answered according to quiz data')
+                    break
+                }
 
                 if (quizData.numberOfOptions === 8) {
                     const answers: string[] = []
 
                     for (let i = 0; i < quizData.numberOfOptions; i++) {
                         const answerSelector = await page.waitForSelector(`#rqAnswerOption${i}`, { state: 'visible', timeout: 10000 })
-                        const answerAttribute = await answerSelector?.evaluate(el => el.getAttribute('iscorrectoption'))
+                        const answerAttribute = await answerSelector?.evaluate((el: any) => el.getAttribute('iscorrectoption'))
 
                         if (answerAttribute && answerAttribute.toLowerCase() === 'true') {
                             answers.push(`#rqAnswerOption${i}`)
@@ -54,12 +70,11 @@ export class Quiz extends Workers {
 
                     // Other type quiz, lightspeed
                 } else if ([2, 3, 4].includes(quizData.numberOfOptions)) {
-                    quizData = await this.bot.browser.func.getQuizData(page) // Refresh Quiz Data
                     const correctOption = quizData.correctAnswer
 
                     for (let i = 0; i < quizData.numberOfOptions; i++) {
                         const answerSelector = await page.waitForSelector(`#rqAnswerOption${i}`, { state: 'visible', timeout: 10000 })
-                        const dataOption = await answerSelector?.evaluate(el => el.getAttribute('data-option'))
+                        const dataOption = await answerSelector?.evaluate((el: any) => el.getAttribute('data-option'))
 
                         if (dataOption === correctOption) {
                             // Click the answer on page
@@ -75,6 +90,15 @@ export class Quiz extends Workers {
                     }
                     await this.bot.utils.wait(2000)
                 }
+            }
+
+            // Final check to ensure quiz completion
+            await this.bot.utils.wait(2000)
+            const finalCheck = await this.bot.browser.func.checkQuizCompleted(page)
+            if (finalCheck) {
+                this.bot.log(this.bot.isMobile, 'QUIZ', 'Quiz completion confirmed')
+            } else {
+                this.bot.log(this.bot.isMobile, 'QUIZ', 'Quiz completion status unclear, but process finished', 'warn')
             }
 
             // Done with
