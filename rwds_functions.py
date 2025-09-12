@@ -1033,6 +1033,9 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
     restart_counts = {bot: 0 for bot in bots_to_run}
     max_restarts = 20  # Número máximo de tentativas de reinicialização
     
+    # Controle de estado dos bots (novo)
+    bot_states = {bot: 'running' for bot in bots_to_run}  # 'running', 'completed', 'failed', 'banned'
+    
     # Padrões de erro críticos que causam o fechamento do bot
     critical_error_patterns = [
         "Error: EIO: i/o error, close",
@@ -1153,6 +1156,7 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
                                         pass
                                     break  # Garante que só processa uma vez por linha
                             if "Account has been suspended!" in line:
+                                bot_states[bot_letter] = 'banned'  # Marcar como banido
                                 threading.Thread(target=send_discord_suspension_alert, args=(bot_letter, discord_webhook_url_br, discord_webhook_url_us)).start()
                             
                             print_colored(bot_letter, line.strip())
@@ -1217,6 +1221,7 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
                                         return
                                     else:
                                         print_colored('Sistema', f"Número máximo de reinicializações ({max_restarts}) atingido para Bot {bot_letter}. Não será reiniciado.", is_error=True)
+                                        bot_states[bot_letter] = 'failed'  # Marcar como falhou definitivamente
                                 else:
                                     print_colored('Sistema', f"Desligamento solicitado. Bot {bot_letter} não será reiniciado.", is_warning=True)
 
@@ -1245,6 +1250,7 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
                     exit_code = process.wait()
                     if exit_code == 0:
                         print_colored('Sistema', f"Bot {bot_letter} concluído com sucesso.", is_success=True)
+                        bot_states[bot_letter] = 'completed'  # Marcar como concluído com sucesso
                         
                         # Verificar quais bots ainda estão em execução
                         running_bots = [b for b, p in processes.items() if p.poll() is None and b != bot_letter]
@@ -1267,6 +1273,7 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
                             # Verificar se o bot está na lista de banidos antes de reiniciar
                             if bot_letter in banned_bots:
                                 print_colored('Sistema', f"Bot {bot_letter} está na lista de contas banidas. Não será reiniciado.", is_error=True)
+                                bot_states[bot_letter] = 'banned'
                                 return
                             
                             restart_counts[bot_letter] += 1
@@ -1294,6 +1301,7 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
                             restart_thread.start()
                         elif restart_counts[bot_letter] >= max_restarts:
                             print_colored('Sistema', f"Número máximo de reinicializações ({max_restarts}) atingido para Bot {bot_letter}. Não será reiniciado.", is_error=True)
+                            bot_states[bot_letter] = 'failed'  # Marcar como falhou definitivamente
                         
                 except Exception as e:
                     print_colored('Sistema', f"Erro ao monitorar Bot {bot_letter}: {str(e)}", is_error=True)
@@ -1362,20 +1370,41 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
                     active_bots = ", ".join(active_processes.keys())
                     print_colored('Sistema', f"Status: {len(active_processes)} bot(s) ativo(s): {active_bots}")
                 else:
-                    print_colored('Sistema', "Status: Nenhum bot ativo no momento. Aguardando reinicializações...")
+                    # Mostrar estado detalhado quando não há processos ativos
+                    completed = [bot for bot in bots_to_run if bot_states[bot] == 'completed']
+                    failed = [bot for bot in bots_to_run if bot_states[bot] == 'failed'] 
+                    banned = [bot for bot in bots_to_run if bot_states[bot] == 'banned']
+                    still_running = [bot for bot in bots_to_run if bot_states[bot] == 'running']
+                    
+                    if completed:
+                        print_colored('Sistema', f"Bots concluídos com sucesso: {', '.join(completed)}")
+                    if failed:
+                        print_colored('Sistema', f"Bots que falharam: {', '.join(failed)}")
+                    if banned:
+                        print_colored('Sistema', f"Bots banidos: {', '.join(banned)}")
+                    if still_running:
+                        print_colored('Sistema', f"Bots ainda aguardando: {', '.join(still_running)}")
+                    else:
+                        print_colored('Sistema', "Nenhum bot aguardando execução.")
                 last_status_check = current_time
             
-            # Se não há processos ativos e nenhum bot esperado pode ser reiniciado, encerrar
+            # Se não há processos ativos, verificar se devemos encerrar
             if not active_processes:
-                # Verificar se todos os bots atingiram o limite de reinicializações ou estão banidos
-                all_bots_finished = True
-                for bot in bots_to_run:
-                    if bot not in banned_bots and restart_counts[bot] < max_restarts:
-                        all_bots_finished = False
-                        break
+                # Contar bots por estado
+                completed_bots = [bot for bot in bots_to_run if bot_states[bot] == 'completed']
+                failed_bots = [bot for bot in bots_to_run if bot_states[bot] == 'failed']
+                banned_bots_list = [bot for bot in bots_to_run if bot_states[bot] == 'banned']
+                still_running = [bot for bot in bots_to_run if bot_states[bot] == 'running']
                 
-                if all_bots_finished:
-                    print_colored('Sistema', "Todos os bots terminaram execução ou atingiram limites. Encerrando monitoramento.")
+                # Se todos os bots terminaram (seja com sucesso, falha ou banimento), encerrar
+                if not still_running:
+                    print_colored('Sistema', f"Execução finalizada - Concluídos: {len(completed_bots)}, Falharam: {len(failed_bots)}, Banidos: {len(banned_bots_list)}", is_success=True)
+                    break
+                
+                # Se há bots ainda esperados mas que podem ser reiniciados, aguardar um pouco mais
+                can_restart = [bot for bot in still_running if bot not in banned_bots and restart_counts[bot] < max_restarts]
+                if not can_restart:
+                    print_colored('Sistema', "Todos os bots terminaram execução, falharam ou estão banidos. Encerrando monitoramento.", is_success=True)
                     break
             
             time.sleep(1)
