@@ -1355,9 +1355,9 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
             with processes_lock:
                 active_processes = {k: v for k, v in processes.items() if v.poll() is None}
             
-            # Log de status a cada 30 segundos
+            # Log de status a cada 5 minutos (300 segundos) em vez de 30 segundos
             current_time = time.time()
-            if current_time - last_status_check >= 30:
+            if current_time - last_status_check >= 300:
                 if active_processes:
                     active_bots = ", ".join(active_processes.keys())
                     print_colored('Sistema', f"Status: {len(active_processes)} bot(s) ativo(s): {active_bots}")
