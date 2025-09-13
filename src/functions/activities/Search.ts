@@ -37,10 +37,16 @@ export class Search extends Workers {
 
         // Calcular limite aleatório baseado em 87-100% dos pontos totais possíveis
         const totalPossiblePoints = this.calculateTotalPossiblePoints(searchCounters)
-        const randomPercentage = this.bot.utils.randomNumber(87, 100) / 100
-        this.randomSearchLimit = Math.ceil(totalPossiblePoints * randomPercentage)
         
-        this.bot.log(this.bot.isMobile, 'SEARCH-BING', `Random search limit set to ${this.randomSearchLimit} points (${(randomPercentage * 100).toFixed(1)}% of ${totalPossiblePoints})`)
+        // Exceção: se o máximo possível for <= 50, completar todos os pontos
+        if (totalPossiblePoints <= 50) {
+            this.randomSearchLimit = totalPossiblePoints
+            this.bot.log(this.bot.isMobile, 'SEARCH-BING', `Low points detected (${totalPossiblePoints} <= 50), completing all points without random limit`)
+        } else {
+            const randomPercentage = this.bot.utils.randomNumber(87, 100) / 100
+            this.randomSearchLimit = Math.ceil(totalPossiblePoints * randomPercentage)
+            this.bot.log(this.bot.isMobile, 'SEARCH-BING', `Random search limit set to ${this.randomSearchLimit} points (${(randomPercentage * 100).toFixed(1)}% of ${totalPossiblePoints})`)
+        }
 
         // Generate search queries
         let googleSearchQueries = await this.getGoogleTrends(this.bot.config.searchSettings.useGeoLocaleQueries ? data.userProfile.attributes.country : 'US')
