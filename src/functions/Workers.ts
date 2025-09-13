@@ -170,7 +170,7 @@ export class Workers {
                     selector = `[data-bi-id^="${activity.name}"] .pointLink:not(.contentContainer .pointLink)`
                 }
 
-                // 等待页面加载并等待confetti动画消失
+                // 等待页面加load并等待confetti动画消失
                 await activityPage.waitForLoadState('domcontentloaded')
                 await this.bot.utils.wait(2000)
                 
@@ -180,23 +180,31 @@ export class Workers {
                     confettiElements.forEach(el => el.remove());
                 }).catch(() => {});
 
-                // 检查按钮是否存在
+                // 检查任务是否真的已经完成 (基于点数进度)
+                if (activity.pointProgress >= activity.pointProgressMax) {
+                    this.bot.log(
+                        this.bot.isMobile, 
+                        'ACTIVITY', 
+                        `Activity "${activity.title}" is already completed (${activity.pointProgress}/${activity.pointProgressMax} points)`
+                    )
+                    continue
+                }
+
+                // 检查按钮是否存在，但不要立即跳过
                 const buttonExists = await activityPage.$(selector).then(Boolean)
                 if (!buttonExists) {
                     this.bot.log(
                         this.bot.isMobile, 
                         'ACTIVITY', 
-                        `Activity "${activity.title}" appears to be already completed (button not found)`
+                        `Button not found for "${activity.title}", but points indicate incomplete (${activity.pointProgress}/${activity.pointProgressMax}). Attempting to continue...`
                     )
-                    // 标记任务完成，继续下一个
-                    continue
                 }
 
                 // 使用force选项强制点击
                 await activityPage.click(selector, { 
                     timeout: 5000,
                     force: true // 忽略覆盖元素强制点击
-                }).catch(async (error) => {
+                }).catch(async (error: any) => {
                     this.bot.log(this.bot.isMobile, 'ACTIVITY', `Failed to click button for "${activity.title}": ${error}`, 'warn')
                     return
                 })
@@ -252,7 +260,7 @@ export class Workers {
                         // Search on Bing are subtypes of "urlreward"
                         if (activity.name.toLowerCase().includes('exploreonbing')) {
                             this.bot.log(this.bot.isMobile, 'ACTIVITY', `Found activity type: "SearchOnBing" title: "${activity.title}"`)
-                            await activityPage.click(selector, { timeout: 5000 }).catch(async (error) => {
+                            await activityPage.click(selector, { timeout: 5000 }).catch(async (error: any) => {
                                 this.bot.log(this.bot.isMobile, 'ACTIVITY', `Failed to click SearchOnBing button for "${activity.title}": ${error}`, 'warn')
                                 return
                             })
@@ -262,7 +270,7 @@ export class Workers {
                         } else {
                             this.bot.log(this.bot.isMobile, 'ACTIVITY', `Found activity type: "UrlReward" title: "${activity.title}"`)
                             // 尝试点击按钮，如果失败则认为任务已完成
-                            await activityPage.click(selector, { timeout: 5000 }).catch(async (error) => {
+                            await activityPage.click(selector, { timeout: 5000 }).catch(async (error: any) => {
                                 this.bot.log(this.bot.isMobile, 'ACTIVITY', `Failed to click UrlReward button for "${activity.title}": ${error}`, 'warn')
                                 return
                             })
