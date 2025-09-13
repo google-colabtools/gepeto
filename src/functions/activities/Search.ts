@@ -20,6 +20,7 @@ export class Search extends Workers {
     private bingHome = 'https://bing.com'
     private searchPageURL = ''
     private firstScroll: boolean = true;
+    private randomSearchLimit: number = 0; // Limite aleatório de pontos para completar as pesquisas
 
     public async doSearch(page: Page, data: DashboardData) {
         this.bot.log(this.bot.isMobile, 'SEARCH-BING', 'Starting Bing searches')
@@ -33,6 +34,13 @@ export class Search extends Workers {
             this.bot.log(this.bot.isMobile, 'SEARCH-BING', 'Bing searches have already been completed')
             return
         }
+
+        // Calcular limite aleatório baseado em 87-100% dos pontos totais possíveis
+        const totalPossiblePoints = this.calculateTotalPossiblePoints(searchCounters)
+        const randomPercentage = this.bot.utils.randomNumber(87, 100) / 100
+        this.randomSearchLimit = Math.ceil(totalPossiblePoints * randomPercentage)
+        
+        this.bot.log(this.bot.isMobile, 'SEARCH-BING', `Random search limit set to ${this.randomSearchLimit} points (${(randomPercentage * 100).toFixed(1)}% of ${totalPossiblePoints})`)
 
         // Generate search queries
         let googleSearchQueries = await this.getGoogleTrends(this.bot.config.searchSettings.useGeoLocaleQueries ? data.userProfile.attributes.country : 'US')
@@ -72,7 +80,9 @@ export class Search extends Workers {
 
             missingPoints = newMissingPoints
 
-            if (missingPoints === 0) {
+            // Verificar se atingiu o limite aleatório definido
+            if (this.hasReachedRandomLimit(searchCounters)) {
+                this.bot.log(this.bot.isMobile, 'SEARCH-BING', `Reached random search limit of ${this.randomSearchLimit} points`)
                 break
             }
 
@@ -91,16 +101,16 @@ export class Search extends Workers {
         }
 
         // Only for mobile searches
-        if (missingPoints > 0 && this.bot.isMobile) {
+        if (missingPoints > 0 && this.bot.isMobile && !this.hasReachedRandomLimit(searchCounters)) {
             return
         }
 
-        // If we still got remaining search queries, generate extra ones
-        if (missingPoints > 0) {
-            this.bot.log(this.bot.isMobile, 'SEARCH-BING', `Search completed but we're missing ${missingPoints} points, generating extra searches`)
+        // If we still got remaining search queries and haven't reached random limit, generate extra ones
+        if (missingPoints > 0 && !this.hasReachedRandomLimit(searchCounters)) {
+            this.bot.log(this.bot.isMobile, 'SEARCH-BING', `Search completed but we're missing ${missingPoints} points and haven't reached random limit (${this.randomSearchLimit}), generating extra searches`)
 
             let i = 0
-            while (missingPoints > 0) {
+            while (missingPoints > 0 && !this.hasReachedRandomLimit(searchCounters)) {
                 const query = googleSearchQueries[i++] as GoogleSearch
 
                 // Get related search terms to the Google search queries
@@ -123,7 +133,8 @@ export class Search extends Workers {
                         missingPoints = newMissingPoints
 
                         // If we satisfied the searches
-                        if (missingPoints === 0) {
+                        if (this.hasReachedRandomLimit(searchCounters)) {
+                            this.bot.log(this.bot.isMobile, 'SEARCH-BING-EXTRA', `Reached random search limit of ${this.randomSearchLimit} points`)
                             break
                         }
 
@@ -137,7 +148,12 @@ export class Search extends Workers {
             }
         }
 
-        this.bot.log(this.bot.isMobile, 'SEARCH-BING', 'Completed searches')
+        // Log final status
+        const finalCounters = await this.bot.browser.func.getSearchPoints()
+        const finalPoints = this.calculateCurrentPoints(finalCounters)
+        const completionPercentage = ((finalPoints / this.calculateTotalPossiblePoints(finalCounters)) * 100).toFixed(1)
+        
+        this.bot.log(this.bot.isMobile, 'SEARCH-BING', `Search farming completed - ${finalPoints}/${this.calculateTotalPossiblePoints(finalCounters)} points (${completionPercentage}%) | Random limit was: ${this.randomSearchLimit}`)
     }
 
     private async bingSearch(searchPage: Page, query: string) {
@@ -564,6 +580,45 @@ export class Search extends Workers {
             + (genericData ? genericData.pointProgressMax - genericData.pointProgress : 0)
 
         return missingPoints
+    }
+
+    private calculateTotalPossiblePoints(counters: Counters) {
+        const mobileData = counters.mobileSearch?.[0] // Mobile searches
+        const genericData = counters.pcSearch?.[0] // Normal searches
+        const edgeData = counters.pcSearch?.[1] // Edge searches
+
+        const totalPossible = (this.bot.isMobile && mobileData)
+            ? mobileData.pointProgressMax
+            : (edgeData ? edgeData.pointProgressMax : 0)
+            + (genericData ? genericData.pointProgressMax : 0)
+
+        return totalPossible
+    }
+
+    private hasReachedRandomLimit(counters: Counters): boolean {
+        const mobileData = counters.mobileSearch?.[0] // Mobile searches
+        const genericData = counters.pcSearch?.[0] // Normal searches
+        const edgeData = counters.pcSearch?.[1] // Edge searches
+
+        const currentPoints = (this.bot.isMobile && mobileData)
+            ? mobileData.pointProgress
+            : (edgeData ? edgeData.pointProgress : 0)
+            + (genericData ? genericData.pointProgress : 0)
+
+        return currentPoints >= this.randomSearchLimit
+    }
+
+    private calculateCurrentPoints(counters: Counters): number {
+        const mobileData = counters.mobileSearch?.[0] // Mobile searches
+        const genericData = counters.pcSearch?.[0] // Normal searches
+        const edgeData = counters.pcSearch?.[1] // Edge searches
+
+        const currentPoints = (this.bot.isMobile && mobileData)
+            ? mobileData.pointProgress
+            : (edgeData ? edgeData.pointProgress : 0)
+            + (genericData ? genericData.pointProgress : 0)
+
+        return currentPoints
     }
 
     private async closeContinuePopup(page: Page) {
