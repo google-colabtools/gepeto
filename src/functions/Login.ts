@@ -178,11 +178,6 @@ export class Login {
             // Wait for email field
             const emailField = await page.waitForSelector(emailInputSelector, { state: 'visible', timeout: 2000 }).catch(() => null)
             if (!emailField) {
-                //screenshot
-                const timestamp = new Date().toISOString().replace(/[:.]/g, '-'); 
-                const screenshotPath = `./email_field_${timestamp}.png`;
-                await page.screenshot({ path: screenshotPath });
-
                 this.bot.log(this.bot.isMobile, 'LOGIN', 'Email field not found', 'warn')
                 //throw new Error('Email field not found');
                 return
@@ -253,10 +248,6 @@ export class Login {
             const nextButton = await page.waitForSelector('button[type="submit"]', { timeout: 2000 }).catch(() => null)
             if (nextButton) {
                 await nextButton.click()
-                await this.bot.utils.wait(1000)
-                const timestamp = new Date().toISOString().replace(/[:.]/g, '-'); 
-                const screenshotPath = `./password_enter_${timestamp}.png`;
-                await page.screenshot({ path: screenshotPath });
                 await this.bot.utils.wait(3000)
                 // Get the plain text content of the body
                 const helptext = await page.evaluate(() => document.body.innerText.trim());
