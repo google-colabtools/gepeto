@@ -26,20 +26,30 @@ export default class BrowserUtil {
             { selector: '.maybe-later', label: 'Mobile Rewards App Banner' },
             { selector: '//div[@id="cookieConsentContainer"]//button[contains(text(), "Accept")]', label: 'Accept Cookie Consent Container', isXPath: true },
             { selector: '#bnp_btn_accept', label: 'Bing Cookie Banner' },
-            { selector: '#reward_pivot_earn', label: 'Reward Coupon Accept' }
+            { selector: '#reward_pivot_earn', label: 'Reward Coupon Accept' },
+            { selector: '#bnp_overlay_wrapper', label: 'Bing Privacy Overlay' },
+            { selector: 'button:has-text("Accept")', label: 'Accept Button' },
+            { selector: 'button:has-text("Allow")', label: 'Allow Button' },
+            { selector: 'button:has-text("Continue")', label: 'Continue Button' },
+            { selector: 'button:has-text("OK")', label: 'OK Button' },
+            { selector: 'button:has-text("Got it")', label: 'Got it Button' },
+            { selector: '[data-testid="close"]', label: 'Close Button' },
+            { selector: '[data-testid="dismiss"]', label: 'Dismiss Button' },
+            { selector: '[aria-label="Close"]', label: 'Close Aria Label' },
+            { selector: '[aria-label="Dismiss"]', label: 'Dismiss Aria Label' }
         ]
 
         for (const button of buttons) {
             try {
-                // 只在需要时创建 locator，避免无用引用
+                // Only create locator when needed, avoiding unnecessary references
                 const element = button.isXPath ? page.locator(`xpath=${button.selector}`) : page.locator(button.selector)
-                await element.first().click({ timeout: 500 })
+                await element.first().click({ timeout: 1000 })
                 await page.waitForTimeout(500)
                 
                 this.bot.log(this.bot.isMobile, 'DISMISS-ALL-MESSAGES', `Dismissed: ${button.label}`)
-                // 释放 element 引用
+                // Release element reference
             } catch (error) {
-                // Silent fail
+                // Silent fail for expected errors
             }
         }
     }
@@ -51,8 +61,8 @@ export default class BrowserUtil {
                 throw new Error('No pages found in context')
             }
 
-            // 获取最后一个没有关闭的页面
-            const activePage = pages.filter(p => !p.isClosed()).pop()
+            // Get the last unclosed page
+            const activePage = pages.filter((p: Page) => !p.isClosed()).pop()
             if (!activePage) {
                 throw new Error('No active pages found')
             }
@@ -62,7 +72,7 @@ export default class BrowserUtil {
             this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'Unable to get latest tab')
             this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', `An error occurred: ${error}`, 'error')
             
-            // 如果无法获取新标签页，返回原始页面而不是undefined
+            // If unable to get new tab, return original page instead of undefined
             return page
         }
     }
@@ -72,7 +82,7 @@ export default class BrowserUtil {
             const browser = page.context()
             const pages = browser.pages()
 
-            // 只保留需要的页面引用，避免无用引用
+            // Only keep necessary page references, avoid unnecessary references
             const homeTab = pages[1]
             let homeTabURL: URL
 
@@ -90,7 +100,7 @@ export default class BrowserUtil {
                 throw this.bot.log(this.bot.isMobile, 'GET-TABS', 'Worker tab could not be found!', 'error')
             }
 
-            // 只返回需要的 tab
+            // Only return necessary tabs
             return {
                 homeTab,
                 workerTab
@@ -102,7 +112,7 @@ export default class BrowserUtil {
 
     async reloadBadPage(page: Page): Promise<void> {
         try {
-            // 只在检测到网络错误时再解析 HTML，减少内存分配
+            // Only parse HTML when network error is detected, reducing memory allocation
             const html = await page.content().catch(() => '')
             if (html.includes('neterror')) {
                 const $ = load(html)

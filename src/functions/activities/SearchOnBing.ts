@@ -21,7 +21,7 @@ export class SearchOnBing extends Workers {
 
             const searchBar = '#sb_form_q'
             await page.waitForSelector(searchBar, { state: 'visible', timeout: 10000 })
-            await page.click(searchBar)
+            await this.safeClick(page, searchBar)
             await this.bot.utils.wait(500)
             await page.keyboard.type(query)
             await page.keyboard.press('Enter')
@@ -52,7 +52,7 @@ export class SearchOnBing extends Workers {
                 // Fetch from the repo directly so the user doesn't need to redownload the script for the new activities
                 const response = await this.bot.axios.request({
                     method: 'GET',
-                    url: 'https://raw.githubusercontent.com/crackerbad/Hwando-Sword/refs/heads/main/src/functions/queries.json'
+                    url: 'https://raw.githubusercontent.com/TheNetsky/Microsoft-Rewards-Script/refs/heads/main/src/functions/queries.json'
                 })
                 queries = response.data
             }
@@ -71,5 +71,21 @@ export class SearchOnBing extends Workers {
 
     private normalizeString(string: string): string {
         return string.normalize('NFD').trim().toLowerCase().replace(/[^\x20-\x7E]/g, '').replace(/[?!]/g, '')
+    }
+
+    private async safeClick(page: Page, selector: string) {
+        try {
+            await page.click(selector, { timeout: 5000 })
+        } catch (e: any) {
+            const msg = (e?.message || '')
+            if (/Timeout.*click/i.test(msg) || /intercepts pointer events/i.test(msg)) {
+                // Try to dismiss overlays then retry once
+                await this.bot.browser.utils.tryDismissAllMessages(page)
+                await this.bot.utils.wait(500)
+                await page.click(selector, { timeout: 5000 })
+            } else {
+                throw e
+            }
+        }
     }
 }
