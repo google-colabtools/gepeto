@@ -54,17 +54,17 @@ class Browser {
             ...(proxy.url && { proxy: { username: proxy.username, password: proxy.password, server: `${proxy.url}:${proxy.port}` } }),
             args: [
                 '--disable-background-networking',
-                '--test-type', // 测试模式
-                '--disable-thorium-dns-config', // 禁用 Thorium DNS 配置
-                '--disable-quic', // 禁用quic连接
-                '--no-first-run', // 跳过首次运行检查
-                '--blink-settings=imagesEnabled=false', // 禁用图片加载
-                '--no-sandbox', // 禁用沙盒模式
-                '--mute-audio', // 禁用音频
-                '--disable-setuid-sandbox', // 禁用 setuid 沙盒
-                '--ignore-certificate-errors', // 忽略所有证书错误
-                '--ignore-certificate-errors-spki-list', // 忽略指定 SPKI 列表的证书错误
-                '--ignore-ssl-errors', // 忽略 SSL 错误
+                '--test-type', // Test mode
+                '--disable-quic', // Disable QUIC connection
+                '--no-first-run', // Skip first run check
+                '--blink-settings=imagesEnabled=false', // Disable image loading
+                '--no-sandbox', // Disable sandbox mode
+                '--mute-audio', // Disable audio
+                '--disable-setuid-sandbox', // Disable setuid sandbox
+                '--ignore-certificate-errors', // Ignore all certificate errors
+                '--ignore-certificate-errors-spki-list', // Ignore certificate errors for specified SPKI list
+                '--ignore-ssl-errors', // Ignore SSL errors
+                '--dns-over-https="https://dns.google/dns-query"', // Use DNS over HTTPS
             ]
         })
 
