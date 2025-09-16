@@ -48,6 +48,7 @@ class Browser {
         return fallbackPath;
         };
         
+        const hostRules = process.env.CHROME_HOST_RULES
         const browser = await playwright.chromium.launch({
             executablePath: getBrowserPath(),
             headless: this.bot.config.headless,
@@ -65,6 +66,7 @@ class Browser {
                 '--ignore-certificate-errors-spki-list', // Ignore certificate errors for specified SPKI list
                 '--ignore-ssl-errors', // Ignore SSL errors
                 '--dns-over-https="https://dns.google/dns-query"', // Use DNS over HTTPS
+                ...(hostRules ? ['--host-rules=' + hostRules] : [])
             ]
         })
 
