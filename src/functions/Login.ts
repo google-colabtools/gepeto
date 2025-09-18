@@ -63,7 +63,7 @@ export class Login {
                     await this.bot.browser.utils.reloadBadPage(page)
                 }
 
-                const isLoggedInTest = await page.waitForSelector('html[data-role-name="RewardsPortal"]', { timeout: 10000 }).then(() => true).catch(() => false)
+                const isLoggedInTest = await page.waitForSelector('html[data-role-name="RewardsPortal"]', { timeout: 5000 }).then(() => true).catch(() => false)
 
                 if (!isLoggedInTest) {
                     await page.goto('https://rewards.bing.com/signin')
