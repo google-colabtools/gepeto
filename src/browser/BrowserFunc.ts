@@ -112,7 +112,7 @@ export default class BrowserFunc {
                 await this.bot.utils.wait(10000);
 
                 // Increase timeout
-                await this.bot.homePage.reload({ waitUntil: 'networkidle', timeout: 90000 })
+                await this.bot.homePage.reload({ waitUntil: 'networkidle', timeout: 10000 })
                 
                 // Try to wait for #more-activities but continue if it fails
                 try {
