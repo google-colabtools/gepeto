@@ -109,10 +109,23 @@ export default class BrowserFunc {
                 }
 
                 // Ensure to wait long enough before reload
-                await this.bot.utils.wait(10000);
+                await this.bot.utils.wait(5000);
 
-                // Increase timeout
-                await this.bot.homePage.reload({ waitUntil: 'networkidle', timeout: 10000 })
+                // Estratégia de reload mais robusta com timeouts progressivos
+                const reloadTimeout = Math.min(30000 + (attempt - 1) * 15000, 90000); // 30s, 45s, 60s, 75s, 90s
+                
+                try {
+                    // Tentar reload com networkidle primeiro
+                    await this.bot.homePage.reload({ waitUntil: 'networkidle', timeout: reloadTimeout })
+                } catch (reloadError: any) {
+                    // Se networkidle falhar, tentar com 'load' como fallback
+                    if (reloadError.message?.includes('Timeout')) {
+                        this.bot.log(this.bot.isMobile, 'DASHBOARD-DATA', `NetworkIdle timeout, trying 'load' fallback (attempt ${attempt})`, 'warn')
+                        await this.bot.homePage.reload({ waitUntil: 'load', timeout: Math.min(reloadTimeout, 60000) })
+                    } else {
+                        throw reloadError
+                    }
+                }
                 
                 // Try to wait for #more-activities but continue if it fails
                 try {
@@ -122,21 +135,35 @@ export default class BrowserFunc {
                 }
                 
                 // Extra wait to ensure scripts are fully loaded
-                await this.bot.utils.wait(5000);
+                await this.bot.utils.wait(3000);
 
-                const scriptContent = await this.bot.homePage.evaluate(() => {
-                    const scripts = Array.from(document.querySelectorAll('script'))
-                    const targetScript = scripts.find(script => 
-                        script.innerText && (
-                            script.innerText.includes('var dashboard') || 
-                            script.innerText.includes('dashboard =')
+                // Múltiplas tentativas para obter o script content
+                let scriptContent = null;
+                for (let scriptAttempt = 1; scriptAttempt <= 3; scriptAttempt++) {
+                    scriptContent = await this.bot.homePage.evaluate(() => {
+                        const scripts = Array.from(document.querySelectorAll('script'))
+                        const targetScript = scripts.find(script => 
+                            script.innerText && (
+                                script.innerText.includes('var dashboard') || 
+                                script.innerText.includes('dashboard =') ||
+                                script.innerText.includes('_w.dashboard')
+                            )
                         )
-                    )
-                    return targetScript?.innerText || null
-                })
+                        return targetScript?.innerText || null
+                    })
+                    
+                    if (scriptContent) {
+                        break;
+                    }
+                    
+                    if (scriptAttempt < 3) {
+                        this.bot.log(this.bot.isMobile, 'DASHBOARD-DATA', `Script attempt ${scriptAttempt}/3 failed, waiting 2s...`, 'warn')
+                        await this.bot.utils.wait(2000);
+                    }
+                }
 
                 if (!scriptContent) {
-                    this.bot.log(this.bot.isMobile, 'DASHBOARD-DATA', `Attempt ${attempt}: Dashboard data not found, waiting to retry...`, 'warn')
+                    this.bot.log(this.bot.isMobile, 'DASHBOARD-DATA', `Attempt ${attempt}: Dashboard data not found after 3 script attempts, waiting to retry...`, 'warn')
                     throw new Error('Dashboard data not found within script')
                 }
 
@@ -175,23 +202,41 @@ export default class BrowserFunc {
 
             } catch (error: any) {
                 lastError = error
-                // For timeout errors, try to refresh the page
-                if (error.message?.includes('net::ERR_TIMED_OUT')) {
-                    this.bot.log(this.bot.isMobile, 'DASHBOARD-DATA', `Page load timed out, trying to refresh page and retry (attempt ${attempt})`, 'warn')
+                const errorMessage = error?.message || 'Unknown error'
+                
+                // Estratégias específicas para diferentes tipos de erro
+                if (errorMessage.includes('net::ERR_TIMED_OUT')) {
+                    this.bot.log(this.bot.isMobile, 'DASHBOARD-DATA', `Network timeout on attempt ${attempt}, trying page refresh...`, 'warn')
                     try {
-                        await this.bot.homePage.reload({ waitUntil: 'load', timeout: 120000 })
+                        await this.bot.homePage.reload({ waitUntil: 'load', timeout: 60000 })
                     } catch (reloadError) {
-                        this.bot.log(this.bot.isMobile, 'DASHBOARD-DATA', 'Page reload still timed out, consider restarting browser context', 'error')
+                        this.bot.log(this.bot.isMobile, 'DASHBOARD-DATA', 'Page reload failed, will retry from beginning', 'error')
+                    }
+                } else if (errorMessage.includes('Timeout') && errorMessage.includes('reload')) {
+                    this.bot.log(this.bot.isMobile, 'DASHBOARD-DATA', `Reload timeout on attempt ${attempt}, will retry with longer timeout...`, 'warn')
+                    // Não fazer nada extra, apenas aguardar o retry
+                } else if (errorMessage.includes('Navigation') || errorMessage.includes('navigation')) {
+                    this.bot.log(this.bot.isMobile, 'DASHBOARD-DATA', `Navigation error on attempt ${attempt}, redirecting home...`, 'warn')
+                    try {
+                        await this.goHome(this.bot.homePage)
+                    } catch (homeError) {
+                        this.bot.log(this.bot.isMobile, 'DASHBOARD-DATA', 'Failed to navigate home, will retry from current state', 'warn')
                     }
                 }
+                
                 if (attempt < maxRetries) {
-                    this.bot.log(this.bot.isMobile, 'DASHBOARD-DATA', `Attempt ${attempt}/${maxRetries} failed: ${error}. Retrying in ${retryDelay/1000} seconds...`, 'warn')
-                    await this.bot.utils.wait(retryDelay)
+                    const waitTime = retryDelay + (attempt - 1) * 2000; // Delay progressivo: 10s, 12s, 14s, 16s
+                    this.bot.log(this.bot.isMobile, 'DASHBOARD-DATA', `Attempt ${attempt}/${maxRetries} failed: ${errorMessage}. Retrying in ${waitTime/1000} seconds...`, 'warn')
+                    await this.bot.utils.wait(waitTime)
                     
-                    // Try to refresh login status before retry
+                    // Try to refresh login status before retry (apenas na tentativa 2)
                     if (attempt === 2) {
                         this.bot.log(this.bot.isMobile, 'DASHBOARD-DATA', 'Trying to revalidate login status...')
-                        await this.goHome(this.bot.homePage)
+                        try {
+                            await this.goHome(this.bot.homePage)
+                        } catch (homeError) {
+                            this.bot.log(this.bot.isMobile, 'DASHBOARD-DATA', 'Login revalidation failed, continuing with retry...', 'warn')
+                        }
                     }
                 }
             }
@@ -265,8 +310,8 @@ export default class BrowserFunc {
      * @returns {number} Total earnable points
     */
     async getAppEarnablePoints(accessToken: string) {
-        const maxRetries = 3;
-        const retryDelay = 5000;
+        const maxRetries = 5; // Aumentado de 3 para 5
+        const baseRetryDelay = 5000;
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
@@ -285,6 +330,9 @@ export default class BrowserFunc {
                 let geoLocale = data.userProfile.attributes.country
                 geoLocale = (this.bot.config.searchSettings.useGeoLocaleQueries && geoLocale.length === 2) ? geoLocale.toLowerCase() : 'cn'
 
+                // Timeout progressivo: 30s, 45s, 60s, 75s, 90s
+                const requestTimeout = Math.min(30000 + (attempt - 1) * 15000, 90000);
+                
                 // Add request timeout and retry
                 const userDataRequest: AxiosRequestConfig = {
                     url: 'https://prod.rewardsplatform.microsoft.com/dapi/me?channel=SAAndroid&options=613',
@@ -295,8 +343,8 @@ export default class BrowserFunc {
                         'X-Rewards-Language': 'zh',
                         'User-Agent': 'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.230 Mobile Safari/537.36'
                     },
-                    timeout: 30000, // 30 seconds timeout
-                    validateStatus: (status) => status >= 200 && status < 300
+                    timeout: requestTimeout,
+                    validateStatus: (status: number) => status >= 200 && status < 300
                 }
 
                 const userDataResponse = await this.bot.axios.request(userDataRequest)
@@ -333,8 +381,10 @@ export default class BrowserFunc {
                     throw this.bot.log(this.bot.isMobile, 'GET-APP-EARNABLE-POINTS', `Reached max retry count (${maxRetries}). Last error: ${errorMessage}`, 'error')
                 }
 
-                // Wait before retrying
-                await this.bot.utils.wait(retryDelay)
+                // Wait progressivo antes de tentar novamente: 5s, 7s, 9s, 11s
+                const waitTime = baseRetryDelay + (attempt - 1) * 2000;
+                this.bot.log(this.bot.isMobile, 'GET-APP-EARNABLE-POINTS', `Retrying in ${waitTime/1000} seconds...`, 'warn')
+                await this.bot.utils.wait(waitTime)
             }
         }
 
@@ -425,7 +475,7 @@ export default class BrowserFunc {
             const html = await page.content()
             const $ = load(html)
 
-            const element = $('.offer-cta').toArray().find(x => x.attribs.href?.includes(activity.offerId))
+            const element = $('.offer-cta').toArray().find((x: any) => x.attribs.href?.includes(activity.offerId))
             if (element) {
                 selector = `a[href*="${element.attribs.href}"]`
             }
