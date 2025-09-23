@@ -244,7 +244,7 @@ export class Search extends Workers {
 
                 this.bot.log(this.bot.isMobile, 'SEARCH-BING', 'Search failed, An error occurred:' + error, 'error')
                 this.bot.log(this.bot.isMobile, 'SEARCH-BING', `Retrying search, attempt ${i}/5`, 'warn')
-
+                await searchPage.screenshot({ path: `search_error_attempt_${i + 1}.png`, fullPage: true });
                 // Reset the tabs
                 const lastTab = await this.bot.browser.utils.getLatestTab(searchPage)
                 await this.closeTabs(lastTab)
