@@ -18,6 +18,10 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # Lock global para sincronização de acesso ao dicionário processes
 processes_lock = threading.Lock()
 
+
+# Configuração de delay entre inicialização de bots (em segundos)
+BOT_START_DELAY_SECONDS = 10  # Delay progressivo entre bots (0, 10, 20, 30 segundos, etc.)
+
 #===============================================================
 
 # Carrega o arquivo .env
@@ -1061,8 +1065,8 @@ def start_bots(discord_webhook_url_br, discord_webhook_url_us, *bots_to_run):
             
             # Se for uma reinicialização, não aplicar o delay inicial
             if not is_restart:
-                # Delay progressivo: 0 seg para o primeiro, 30 seg para o segundo, 60 seg para o terceiro, etc.
-                delay = position * 20  # 20 segundos multiplicado pela posição
+                # Delay progressivo: 0 seg para o primeiro, BOT_START_DELAY_SECONDS para o segundo, etc.
+                delay = position * BOT_START_DELAY_SECONDS  # Delay configurável multiplicado pela posição
 
                 if delay > 0:
                     print_colored('Sistema', f"Bot {bot_letter} iniciará em {delay} segundos...")
