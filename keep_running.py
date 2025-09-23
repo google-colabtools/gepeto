@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string, send_from_directory, abort, url_for, request, redirect, send_file
+from flask import Flask, render_template_string, send_from_directory, abort, url_for, request, redirect, send_file, jsonify
 import os
 from werkzeug.utils import secure_filename
 import time
@@ -10,8 +10,16 @@ app = Flask(__name__)
 
 # Adicione isso no início do seu arquivo, após criar o app Flask
 @app.after_request
-def allow_iframe(response):
+def allow_iframe_and_cors(response):
+    # Remove X-Frame-Options para permitir iframe
     response.headers.pop('X-Frame-Options', None)
+    
+    # Adiciona cabeçalhos CORS para permitir requisições AJAX
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+    response.headers['Access-Control-Max-Age'] = '86400'
+    
     return response
 
 # Define o diretório base para o explorador de arquivos
@@ -303,12 +311,28 @@ def home():
                     modalBody.innerHTML = '<div class="loading">Carregando...</div>';
                     
                     fetch('/api/files' + (path ? '/' + path : ''))
-                        .then(response => response.json())
+                        .then(response => {{
+                            if (!response.ok) {{
+                                throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+                            }}
+                            return response.json();
+                        }})
                         .then(data => {{
                             modalBody.innerHTML = generateFileExplorerHTML(data);
                         }})
                         .catch(error => {{
-                            modalBody.innerHTML = '<div style="color: #ff6b6b;">Erro ao carregar arquivos: ' + error.message + '</div>';
+                            console.error('Error loading files:', error);
+                            modalBody.innerHTML = '<div style="color: #ff6b6b; padding: 20px; text-align: center;">' +
+                                '<h3>Erro ao carregar arquivos</h3>' +
+                                '<p><strong>Detalhes:</strong> ' + error.message + '</p>' +
+                                '<p><strong>Possíveis soluções:</strong></p>' +
+                                '<ul style="text-align: left; display: inline-block;">' +
+                                '<li>Verifique se o servidor está rodando</li>' +
+                                '<li>Verifique a URL no navegador</li>' +
+                                '<li>Tente recarregar a página</li>' +
+                                '<li>Verifique o console do navegador para mais detalhes</li>' +
+                                '</ul>' +
+                                '</div>';
                         }});
                 }}
                 
@@ -406,7 +430,12 @@ def home():
                         method: 'POST',
                         body: formData
                     }})
-                    .then(response => response.json())
+                    .then(response => {{
+                        if (!response.ok) {{
+                            throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+                        }}
+                        return response.json();
+                    }})
                     .then(data => {{
                         if (data.success) {{
                             loadDirectory(currentPath); // Recarrega o diretório
@@ -415,7 +444,8 @@ def home():
                         }}
                     }})
                     .catch(error => {{
-                        alert('Erro no upload: ' + error.message);
+                        console.error('Error uploading files:', error);
+                        alert('Erro no upload: ' + error.message + '\\n\\nVerifique o console para mais detalhes.');
                     }});
                 }}
                 
@@ -458,6 +488,16 @@ def home():
     '''
 
 # API routes para o explorador de arquivos no modal
+
+# Rota para lidar com requisições OPTIONS (CORS preflight)
+@app.route('/api/files/', methods=['OPTIONS'])
+@app.route('/api/files/<path:subpath>', methods=['OPTIONS'])
+@app.route('/api/upload/', methods=['OPTIONS'])
+@app.route('/api/upload/<path:subpath>', methods=['OPTIONS'])
+def options_handler(subpath=''):
+    """Handle CORS preflight requests"""
+    return jsonify({'status': 'OK'}), 200
+
 @app.route('/api/files/')
 @app.route('/api/files/<path:subpath>')
 def api_file_list(subpath=''):
@@ -580,4 +620,5 @@ def file_explorer(subpath=''):
         return send_from_directory(directory, filename, as_attachment=force_download)
 
 if __name__ == "__main__":
-    app.run()
+    # Configure o Flask para aceitar conexões de qualquer IP (importante para Linux/Docker)
+    app.run(host='0.0.0.0', port=5000, debug=False)
