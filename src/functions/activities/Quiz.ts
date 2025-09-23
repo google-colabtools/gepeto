@@ -17,7 +17,7 @@ export class Quiz extends Workers {
                 this.bot.log(this.bot.isMobile, 'QUIZ', 'Quiz has already been started, trying to finish it')
             }
 
-            await this.bot.utils.wait(2000)
+            await this.bot.utils.waitRandom(2000,5000, 'normal')
 
             let quizData = await this.bot.browser.func.getQuizData(page)
             let questionsRemaining = quizData.maxQuestions - quizData.CorrectlyAnsweredQuestionCount // Amount of questions remaining
@@ -88,12 +88,12 @@ export class Quiz extends Workers {
                             }
                         }
                     }
-                    await this.bot.utils.wait(2000)
+                    await this.bot.utils.waitRandom(2000,5000, 'normal')
                 }
             }
 
             // Final check to ensure quiz completion
-            await this.bot.utils.wait(2000)
+            await this.bot.utils.waitRandom(2000,5000, 'normal')
             const finalCheck = await this.bot.browser.func.checkQuizCompleted(page)
             if (finalCheck) {
                 this.bot.log(this.bot.isMobile, 'QUIZ', 'Quiz completion confirmed')
@@ -102,7 +102,7 @@ export class Quiz extends Workers {
             }
 
             // Done with
-            await this.bot.utils.wait(2000)
+            await this.bot.utils.waitRandom(2000,5000, 'normal')
             await page.close()
 
             this.bot.log(this.bot.isMobile, 'QUIZ', 'Completed the quiz successfully')

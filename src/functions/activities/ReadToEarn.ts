@@ -7,6 +7,26 @@ import { DashboardData } from '../../interface/DashboardData'
 
 
 export class ReadToEarn extends Workers {
+    /**
+     * Calculate reduced delay for Read to Earn (20-50% reduction)
+     * @param minDelay Original minimum delay in milliseconds
+     * @param maxDelay Original maximum delay in milliseconds
+     * @returns Object with reduced min and max delays
+     */
+    private getReducedDelay(minDelay: number, maxDelay: number): { min: number, max: number } {
+        // Generate random reduction percentage between 20% and 50%
+        const reductionPercentage = this.bot.utils.randomNumber(0.2, 0.5)
+        
+        const reducedMin = Math.floor(minDelay * (1 - reductionPercentage))
+        const reducedMax = Math.floor(maxDelay * (1 - reductionPercentage))
+        
+        // Ensure minimum delay is at least 100ms to avoid too aggressive timing
+        const finalMin = Math.max(reducedMin, 100)
+        const finalMax = Math.max(reducedMax, finalMin + 100)
+        
+        return { min: finalMin, max: finalMax }
+    }
+
     public async doReadToEarn(accessToken: string, data: DashboardData) {
         this.bot.log(this.bot.isMobile, 'READ-TO-EARN', 'Starting Read to Earn')
 
@@ -61,7 +81,14 @@ export class ReadToEarn extends Workers {
                 } else {
                     this.bot.log(this.bot.isMobile, 'READ-TO-EARN', `Read article ${i + 1} of ${articleCount} max | Gained ${newBalance - userBalance} Points`)
                     userBalance = newBalance
-                    await this.bot.utils.wait(Math.floor(this.bot.utils.randomNumber(this.bot.utils.stringToMs(this.bot.config.searchSettings.searchDelay.min), this.bot.utils.stringToMs(this.bot.config.searchSettings.searchDelay.max))))
+                    
+                    // Calculate reduced delays specifically for Read to Earn (20-50% reduction)
+                    const originalMinMs = this.bot.utils.stringToMs(this.bot.config.searchSettings.searchDelay.min)
+                    const originalMaxMs = this.bot.utils.stringToMs(this.bot.config.searchSettings.searchDelay.max)
+                    const reducedDelays = this.getReducedDelay(originalMinMs, originalMaxMs)
+                    
+                    const delayTime = Math.floor(this.bot.utils.randomNumber(reducedDelays.min, reducedDelays.max))
+                    await this.bot.utils.wait(delayTime)
                 }
             }
 

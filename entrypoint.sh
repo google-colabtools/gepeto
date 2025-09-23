@@ -29,17 +29,26 @@ echo "Squid is ready"
 
 # Show public IP and country via proxy
 echo "Testing public IP and country via Squid"
-PROXY_IP=$(curl -s --proxy http://127.0.0.1:3128 https://ipinfo.io/ip)
-PROXY_COUNTRY=$(curl -s --proxy http://127.0.0.1:3128 https://ipinfo.io/country)
-if [ -z "$PROXY_IP" ]; then
+PROXY_RESPONSE=$(curl -s --proxy http://127.0.0.1:3128 https://api.country.is/)
+if [ -z "$PROXY_RESPONSE" ]; then
     echo "Public IP: (not detected)"
-else
-    echo "Public IP: $PROXY_IP"
-fi
-if [ -z "$PROXY_COUNTRY" ]; then
     echo "Public Country: (not detected)"
 else
-    echo "Public Country: $PROXY_COUNTRY"
+    # Extract IP and country from JSON response using simple grep/sed
+    PROXY_IP=$(echo "$PROXY_RESPONSE" | grep -o '"ip":"[^"]*"' | sed 's/"ip":"\([^"]*\)"/\1/')
+    PROXY_COUNTRY=$(echo "$PROXY_RESPONSE" | grep -o '"country":"[^"]*"' | sed 's/"country":"\([^"]*\)"/\1/')
+    
+    if [ -z "$PROXY_IP" ]; then
+        echo "Public IP: (not detected)"
+    else
+        echo "Public IP: $PROXY_IP"
+    fi
+    
+    if [ -z "$PROXY_COUNTRY" ]; then
+        echo "Public Country: (not detected)"
+    else
+        echo "Public Country: $PROXY_COUNTRY"
+    fi
 fi
 # execute CMD
 echo "$@"

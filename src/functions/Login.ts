@@ -139,7 +139,7 @@ export class Login {
             await this.bot.browser.utils.reloadBadPage(page)
             await this.bot.utils.wait(2000)
             await this.enterPassword(page, password)
-            await this.bot.utils.wait(2000)
+            await this.bot.utils.waitRandom(2000,5000, 'normal')
 
             // Dismiss any login messages (like Passkey prompts)
             await this.dismissLoginMessages(page)
@@ -336,7 +336,7 @@ export class Login {
             }
 
             await page.click('button[aria-describedby="confirmSendTitle"]').catch(() => { })
-            await this.bot.utils.wait(2000)
+            await this.bot.utils.waitRandom(2000,5000)
             const element = await page.waitForSelector('#displaySign, div[data-testid="displaySign"]>span', { state: 'visible', timeout: 2000 })
             return await element.textContent()
         }

@@ -183,7 +183,7 @@ export class Search extends Workers {
                 await searchPage.waitForSelector(searchBar, { state: 'visible', timeout: 10000 })
                 // Simulate mouse movement to search bar and hover before clicking
                 await searchPage.hover(searchBar);
-                await this.bot.utils.wait(this.bot.utils.randomNumber(200, 500)); // Hover pause
+                await this.bot.utils.waitRandom(200, 500); // 悬停停顿
                 await searchPage.click(searchBar); // Focus on the textarea
                 await this.bot.utils.wait(this.bot.utils.randomNumber(500, 2000))
                 await searchPage.keyboard.down(platformControlKey)
@@ -224,7 +224,7 @@ export class Search extends Workers {
 
                     // Add random wait between loops (no wait after last loop)
                     if (i < loopCount - 1) {
-                        await this.bot.utils.wait(this.bot.utils.randomNumber(2000, 5000))
+                        await this.bot.utils.waitRandom(2000, 5000);
                     }
                 }
 

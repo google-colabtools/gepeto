@@ -1,39 +1,46 @@
 import { Page } from 'rebrowser-playwright'
+
 import { Workers } from '../Workers'
 
+
 export class UrlReward extends Workers {
+
     async doUrlReward(page: Page) {
-        this.bot.log(this.bot.isMobile, 'URL-REWARD', 'Trying to complete UrlReward')
-
+        this.bot.log(this.bot.isMobile, 'URL Reward', 'Attempting to complete URL reward')
+        const probability = this.bot.utils.randomNumber(1,100);
+        //70% chance to run randomly
+        if (this.bot.config.searchSettings.scrollRandomResults && probability <=70) {
+            await this.bot.utils.waitRandom(2000,5000, 'normal')
+            await this.randomScroll(page)
+        }
         try {
-            // 检查页面是否已关闭
-            if (page.isClosed()) {
-                this.bot.log(this.bot.isMobile, 'URL-REWARD', 'Page is already closed', 'warn')
-                return
-            }
+            this.bot.utils.waitRandom(10000,18000, 'normal')
 
-            await this.bot.utils.wait(2000)
+            await page.close()
 
-            // 只在 context 有多个页面时才关闭当前页面，避免关闭唯一页面
-            const context = page.context()
-            const pages = context.pages()
-            if (!page.isClosed() && pages.length > 1) {
-                await page.close()
-            }
-
-            this.bot.log(this.bot.isMobile, 'URL-REWARD', 'Completed the UrlReward successfully')
+            this.bot.log(this.bot.isMobile, 'URL Reward', 'Successfully completed URL reward')
         } catch (error) {
-            this.bot.log(this.bot.isMobile, 'URL-REWARD', `An error occurred: ${error}`, 'error')
-            // 确保页面被关闭，即使发生错误，但只在有多个页面时关闭
-            try {
-                const context = page.context()
-                const pages = context.pages()
-                if (!page.isClosed() && pages.length > 1) {
-                    await page.close()
-                }
-            } catch (closeError) {
-                this.bot.log(this.bot.isMobile, 'URL-REWARD', `Error closing page: ${closeError}`, 'error')
-            }
+            await page.close()
+            this.bot.log(this.bot.isMobile, 'URL Reward', 'Error occurred:' + error, 'error')
         }
     }
+    /**
+     * Perform random scroll operation on the results page
+     * @param page - Page object of the results page
+     */
+    private async randomScroll(page: Page) {
+        try {
+            const viewportHeight = await page.evaluate(() => window.innerHeight)
+            const totalHeight = await page.evaluate(() => document.body.scrollHeight)
+            const randomScrollPosition = this.bot.utils.randomNumber(0, totalHeight - viewportHeight, 'normal')
+
+            await page.evaluate((scrollPos) => {
+                window.scrollTo(0, scrollPos)
+            }, randomScrollPosition)
+
+        } catch (error) {
+            this.bot.log(this.bot.isMobile, 'SEARCH-RANDOM-SCROLL', 'Error occurred:' + error, 'error')
+        }
+    }
+
 }

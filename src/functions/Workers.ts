@@ -154,7 +154,7 @@ export class Workers {
                     activityPage = await this.bot.browser.utils.getLatestTab(activityPage)
                 }
 
-                await this.bot.utils.wait(1000)
+                await this.bot.utils.waitRandom(1000,4000)
 
                 if (activityPage.url() !== activityInitial) {
                     await activityPage.goto(activityInitial)
@@ -172,7 +172,7 @@ export class Workers {
 
                 // 等待页面加load并等待confetti动画消失
                 await activityPage.waitForLoadState('domcontentloaded')
-                await this.bot.utils.wait(2000)
+                await this.bot.utils.waitRandom(2000,5000)
                 
                 // 尝试移除confetti元素
                 await activityPage.evaluate(() => {
@@ -215,7 +215,7 @@ export class Workers {
                 if it didn't then it gave enough time for the page to load.
                 */
                 await activityPage.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => { })
-                await this.bot.utils.wait(2000)
+                await this.bot.utils.waitRandom(2000,5000)
 
                 switch (activity.promotionType) {
                     // Quiz (Poll, Quiz or ABC)
@@ -286,7 +286,7 @@ export class Workers {
                 }
 
                 // Cooldown
-                await this.bot.utils.wait(2000)
+                await this.bot.utils.waitRandom(2000,5000)
 
             } catch (error) {
                 this.bot.log(this.bot.isMobile, 'ACTIVITY', 'An error occurred:' + error, 'error')

@@ -12,11 +12,11 @@ export class Poll extends Workers {
             const buttonId = `#btoption${Math.floor(this.bot.utils.randomNumber(0, 1))}`
 
             await page.waitForSelector(buttonId, { state: 'visible', timeout: 10000 }).catch(() => { }) // We're gonna click regardless or not
-            await this.bot.utils.wait(2000)
+            await this.bot.utils.waitRandom(2000,5000)
 
             await page.click(buttonId)
 
-            await this.bot.utils.wait(4000)
+            await this.bot.utils.waitRandom(4000,7000)
             await page.close()
 
             this.bot.log(this.bot.isMobile, 'POLL', 'Completed the poll successfully')

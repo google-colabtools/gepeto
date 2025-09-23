@@ -13,7 +13,7 @@ export class SearchOnBing extends Workers {
         this.bot.log(this.bot.isMobile, 'SEARCH-ON-BING', 'Trying to complete SearchOnBing')
 
         try {
-            await this.bot.utils.wait(5000)
+            await this.bot.utils.waitRandom(5000,9000, 'normal')
 
             await this.bot.browser.utils.tryDismissAllMessages(page)
 
@@ -22,10 +22,10 @@ export class SearchOnBing extends Workers {
             const searchBar = '#sb_form_q'
             await page.waitForSelector(searchBar, { state: 'visible', timeout: 10000 })
             await this.safeClick(page, searchBar)
-            await this.bot.utils.wait(500)
+            await this.bot.utils.waitRandom(500,2000, 'normal')
             await page.keyboard.type(query)
             await page.keyboard.press('Enter')
-            await this.bot.utils.wait(3000)
+            await this.bot.utils.waitRandom(3000,6000, 'normal')
 
             await page.close()
 
@@ -81,7 +81,7 @@ export class SearchOnBing extends Workers {
             if (/Timeout.*click/i.test(msg) || /intercepts pointer events/i.test(msg)) {
                 // Try to dismiss overlays then retry once
                 await this.bot.browser.utils.tryDismissAllMessages(page)
-                await this.bot.utils.wait(500)
+                await this.bot.utils.waitRandom(500,1500, 'normal')
                 await page.click(selector, { timeout: 5000 })
             } else {
                 throw e

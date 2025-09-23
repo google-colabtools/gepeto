@@ -8,6 +8,12 @@ export default class Util {
         })
     }
 
+    async waitRandom(min_ms: number, max_ms: number, distribution: 'uniform' | 'normal' = 'uniform'): Promise<void> {
+        return new Promise<void>((resolve) => {
+            setTimeout(resolve, this.randomNumber(min_ms, max_ms, distribution))
+        })
+    }
+
     getFormattedDate(ms = Date.now()): string {
         const today = new Date(ms)
         const month = String(today.getMonth() + 1).padStart(2, '0')  // January is 0
@@ -23,8 +29,18 @@ export default class Util {
             .map(({ value }) => value)
     }
 
-    randomNumber(min: number, max: number): number {
-        return Math.floor(Math.random() * (max - min + 1)) + min
+    randomNumber(min: number, max: number, distribution: 'uniform' | 'normal' = 'uniform'): number {
+        if (distribution === 'uniform') {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+        // Normal distribution implementation (Box-Muller transform)
+        let u = 0, v = 0;
+        while (u === 0) u = Math.random();
+        while (v === 0) v = Math.random();
+        let num = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+        num = num / 10.0 + 0.5; // normalize to 0-1 range
+        if (num > 1 || num < 0) num = this.randomNumber(min, max, distribution); // boundary handling
+        return Math.floor(num * (max - min + 1)) + min;
     }
 
     chunkArray<T>(arr: T[], numChunks: number): T[][] {

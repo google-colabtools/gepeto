@@ -135,7 +135,7 @@ export default class BrowserFunc {
                 }
                 
                 // Extra wait to ensure scripts are fully loaded
-                await this.bot.utils.wait(3000);
+                await this.bot.utils.waitRandom(3000,5000, 'normal');
 
                 // Múltiplas tentativas para obter o script content
                 let scriptContent = null;

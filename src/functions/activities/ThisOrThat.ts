@@ -18,7 +18,7 @@ export class ThisOrThat extends Workers {
                 this.bot.log(this.bot.isMobile, 'THIS-OR-THAT', 'ThisOrThat has already been started, trying to finish it')
             }
 
-            await this.bot.utils.wait(2000)
+            await this.bot.utils.waitRandom(2000,5000)
 
             // Solving
             const quizData = await this.bot.browser.func.getQuizData(page)
