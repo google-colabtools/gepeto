@@ -94,12 +94,12 @@ export class Workers {
             morePromotions.push(data.promotionalItem as unknown as MorePromotion)
         }
 
-        // 更严格的筛选条件：
-        // 1. !x.complete - 任务未完成
-        // 2. x.pointProgressMax > 0 - 有积分可赚取
-        // 3. x.exclusiveLockedFeatureStatus !== 'locked' - 任务未锁定
-        // 4. x.promotionType in ['quiz', 'urlreward'] - 支持的任务类型
-        // 5. x.pointProgress < x.pointProgressMax - 确保积分未达到上限
+        // Stricter filtering conditions:
+        // 1. !x.complete - task is not completed
+        // 2. x.pointProgressMax > 0 - there are points to be earned
+        // 3. x.exclusiveLockedFeatureStatus !== 'locked' - task is not locked
+        // 4. x.promotionType in ['quiz', 'urlreward'] - supported task types
+        // 5. x.pointProgress < x.pointProgressMax - ensure points haven't reached the limit
         const activitiesUncompleted = morePromotions?.filter(x => 
             !x.complete && 
             x.pointProgressMax > 0 && 
@@ -113,7 +113,7 @@ export class Workers {
             return
         }
 
-        // 添加详细日志
+        // Add detailed logging
         this.bot.log(this.bot.isMobile, 'MORE-PROMOTIONS', `Found ${activitiesUncompleted.length} incomplete promotions:`)
         activitiesUncompleted.forEach(x => {
             this.bot.log(
@@ -170,17 +170,17 @@ export class Workers {
                     selector = `[data-bi-id^="${activity.name}"] .pointLink:not(.contentContainer .pointLink)`
                 }
 
-                // 等待页面加load并等待confetti动画消失
+                // Wait for the page to load and wait for the confetti animation to disappear
                 await activityPage.waitForLoadState('domcontentloaded')
                 await this.bot.utils.waitRandom(2000,5000)
                 
-                // 尝试移除confetti元素
+                // Try to remove confetti elements
                 await activityPage.evaluate(() => {
                     const confettiElements = document.querySelectorAll('.confetti-image-block, .dashboardPopUpModalImageContainer');
                     confettiElements.forEach(el => el.remove());
                 }).catch(() => {});
 
-                // 检查任务是否真的已经完成 (基于点数进度)
+                // Check if the task is actually completed (based on point progress)
                 if (activity.pointProgress >= activity.pointProgressMax) {
                     this.bot.log(
                         this.bot.isMobile, 
@@ -190,7 +190,7 @@ export class Workers {
                     continue
                 }
 
-                // 检查按钮是否存在，但不要立即跳过
+                // Check if the button exists, but don't skip immediately
                 const buttonExists = await activityPage.$(selector).then(Boolean)
                 if (!buttonExists) {
                     this.bot.log(
@@ -200,10 +200,10 @@ export class Workers {
                     )
                 }
 
-                // 使用force选项强制点击
+                // Use force option to force click
                 await activityPage.click(selector, { 
                     timeout: 5000,
-                    force: true // 忽略覆盖元素强制点击
+                    force: true // Ignore covering elements and force click
                 }).catch(async (error: any) => {
                     this.bot.log(this.bot.isMobile, 'ACTIVITY', `Failed to click button for "${activity.title}": ${error}`, 'warn')
                     return
@@ -269,7 +269,7 @@ export class Workers {
 
                         } else {
                             this.bot.log(this.bot.isMobile, 'ACTIVITY', `Found activity type: "UrlReward" title: "${activity.title}"`)
-                            // 尝试点击按钮，如果失败则认为任务已完成
+                            // Try to click the button, if it fails assume the task is completed
                             await activityPage.click(selector, { timeout: 5000 }).catch(async (error: any) => {
                                 this.bot.log(this.bot.isMobile, 'ACTIVITY', `Failed to click UrlReward button for "${activity.title}": ${error}`, 'warn')
                                 return

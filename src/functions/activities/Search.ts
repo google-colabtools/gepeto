@@ -171,7 +171,8 @@ export class Search extends Workers {
             try {
                 // This page had already been set to the Bing.com page or the previous search listing, we just need to select it
                 searchPage = await this.bot.browser.utils.getLatestTab(searchPage)
-
+                await this.bot.utils.wait(this.bot.utils.randomNumber(500, 2000))
+                await this.bot.browser.utils.tryDismissAllMessages(searchPage)
                 // Go to top of the page
                 await searchPage.evaluate(() => {
                     window.scrollTo(0, 0)
@@ -183,7 +184,7 @@ export class Search extends Workers {
                 await searchPage.waitForSelector(searchBar, { state: 'visible', timeout: 10000 })
                 // Simulate mouse movement to search bar and hover before clicking
                 await searchPage.hover(searchBar);
-                await this.bot.utils.waitRandom(200, 500); // 悬停停顿
+                await this.bot.utils.waitRandom(200, 500); // Hover pause
                 await searchPage.click(searchBar); // Focus on the textarea
                 await this.bot.utils.wait(this.bot.utils.randomNumber(500, 2000))
                 await searchPage.keyboard.down(platformControlKey)
@@ -341,12 +342,8 @@ export class Search extends Workers {
      */
     private async humanLikeScroll(page: Page) {
         // Get current scroll position and page height
-        const [currentY, scrollHeight, windowHeight] = await Promise.all([
-            page.evaluate(() => window.scrollY),
-            page.evaluate(() => document.body.scrollHeight),
-            page.evaluate(() => window.innerHeight)
-        ]);
-        const maxScroll = scrollHeight - windowHeight;
+        const currentY =  await page.evaluate(() => window.scrollY)
+        const maxScroll = await page.evaluate(() => document.body.scrollHeight) - await page.evaluate(() => window.innerHeight);
 
         // Set scroll parameters based on device type
         let scrollParams;
