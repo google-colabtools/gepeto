@@ -91,14 +91,11 @@ export class UrlReward extends Workers {
             const mainDelayTime = Math.floor(this.bot.utils.randomNumber(reducedDelays.min, reducedDelays.max))
             await this.bot.utils.wait(mainDelayTime)
 
-            await page.close()
-
             const completionMessage = interactionsMade 
                 ? 'Successfully completed URL reward with page interactions'
                 : 'Successfully completed URL reward (minimal interaction mode)';
             this.bot.log(this.bot.isMobile, 'URL Reward', completionMessage)
         } catch (error) {
-            await page.close()
             this.bot.log(this.bot.isMobile, 'URL Reward', 'Error occurred:' + error, 'error')
         }
     }
