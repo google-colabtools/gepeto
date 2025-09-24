@@ -51,7 +51,7 @@ def home(subpath=''):
 
         items = sorted(os.listdir(requested_path), key=str.lower)
         dirs = [item for item in items if os.path.isdir(os.path.join(requested_path, item))]
-        files = [item for item in items if os.path.isfile(os.path.join(requested_path, item))]
+        files = [item for item in items if os.path.isfile(os.path.join(requested_path, item)) and item != 'accounts.json']
 
         path_parts = subpath.split('/') if subpath else []
         breadcrumbs = [{'name': 'home', 'path': url_for('home')}]
