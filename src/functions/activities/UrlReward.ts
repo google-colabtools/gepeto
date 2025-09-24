@@ -110,7 +110,6 @@ export class UrlReward extends Workers {
         // Get current scroll position and page height
         const currentY =  await page.evaluate(() => window.scrollY)
         const maxScroll = await page.evaluate(() => document.body.scrollHeight) - await page.evaluate(() => window.innerHeight);
-        const maxScroll = scrollHeight - windowHeight;
 
         // Set scroll parameters based on device type
         let scrollParams;
