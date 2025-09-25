@@ -311,6 +311,8 @@ export class UrlReward extends Workers {
                     const screenshotPath = `./url_rewards_hover_overlay_blocking_${timestamp}.png`;
                     await page.screenshot({ path: screenshotPath });
                     // Continue without hovering - just try mouse movement instead
+                    // try to dismiss overlays again
+                    await this.bot.browser.utils.tryDismissAllMessages(page);
                     try {
                         const box = await randomElement.boundingBox();
                         if (box) {
