@@ -50,6 +50,52 @@ else
         echo "Public Country: $PROXY_COUNTRY"
     fi
 fi
+
+# Function to check available disk space
+check_disk_space() {
+    echo "=== Disk Space Information ==="
+    
+    # Get disk usage for current directory (where the container is running)
+    CURRENT_DIR=$(pwd)
+    echo "Current directory: $CURRENT_DIR"
+    
+    # Use df to get disk space information
+    DISK_INFO=$(df -h "$CURRENT_DIR" | tail -n 1)
+    
+    if [ -n "$DISK_INFO" ]; then
+        # Extract information using awk
+        FILESYSTEM=$(echo "$DISK_INFO" | awk '{print $1}')
+        TOTAL_SIZE=$(echo "$DISK_INFO" | awk '{print $2}')
+        USED_SIZE=$(echo "$DISK_INFO" | awk '{print $3}')
+        AVAILABLE_SIZE=$(echo "$DISK_INFO" | awk '{print $4}')
+        USE_PERCENT=$(echo "$DISK_INFO" | awk '{print $5}')
+        MOUNT_POINT=$(echo "$DISK_INFO" | awk '{print $6}')
+        
+        echo "Filesystem: $FILESYSTEM"
+        echo "Total Size: $TOTAL_SIZE"
+        echo "Used: $USED_SIZE"
+        echo "Available: $AVAILABLE_SIZE"
+        echo "Usage: $USE_PERCENT"
+        echo "Mount Point: $MOUNT_POINT"
+        
+        # Check if available space is less than 1GB and warn
+        AVAILABLE_KB=$(df "$CURRENT_DIR" | tail -n 1 | awk '{print $4}')
+        AVAILABLE_GB=$((AVAILABLE_KB / 1024 / 1024))
+        
+        if [ "$AVAILABLE_GB" -lt 1 ]; then
+            echo "⚠️  WARNING: Low disk space! Only ${AVAILABLE_SIZE} available"
+        else
+            echo "✅ Disk space is sufficient: ${AVAILABLE_SIZE} available"
+        fi
+    else
+        echo "❌ Could not retrieve disk space information"
+    fi
+    echo "================================"
+}
+
+# Check disk space before starting
+check_disk_space
+
 # execute CMD
 echo "$@"
 "$@"
