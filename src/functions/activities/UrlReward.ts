@@ -248,6 +248,9 @@ export class UrlReward extends Workers {
      */
     private async clickRandomLink(page: Page) {
         try {
+            // First, try to dismiss any overlays or banners that might interfere
+            await this.bot.browser.utils.tryDismissAllMessages(page);
+            
             // Try to find clickable elements (links, buttons, etc.)
             const clickableSelectors = [
                 'a[href]',           // Links
@@ -273,7 +276,10 @@ export class UrlReward extends Workers {
 
             if (allLinks.length <= 0) {
                 this.bot.log(this.bot.isMobile, 'URL-REWARD', 'No clickable elements found, simulating page interaction instead');
-                
+                //screenlog
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-'); 
+                const screenshotPath = `./url_rewards_no_clickable_${timestamp}.png`;
+                await page.screenshot({ path: screenshotPath });
                 // Fallback: simulate human behavior without clicking
                 // Move mouse around randomly to simulate reading
                 const mouseMovements = this.bot.utils.randomNumber(2, 4);
@@ -294,9 +300,31 @@ export class UrlReward extends Workers {
 
             const randomElement = allLinks[this.bot.utils.randomNumber(0, allLinks.length - 1)];
             
-            // Hover before clicking to simulate human behavior
+            // Hover before clicking to simulate human behavior with timeout protection
             if (randomElement) {
-                await randomElement.hover();
+                try {
+                    await randomElement.hover({ timeout: 5000 });
+                } catch (hoverError) {
+                    this.bot.log(this.bot.isMobile, 'URL-REWARD', `Hover failed (likely overlay blocking): ${hoverError}`, 'warn');
+                    //screenlog
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-'); 
+                    const screenshotPath = `./url_rewards_hover_overlay_blocking_${timestamp}.png`;
+                    await page.screenshot({ path: screenshotPath });
+                    // Continue without hovering - just try mouse movement instead
+                    try {
+                        const box = await randomElement.boundingBox();
+                        if (box) {
+                            await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+                        }
+                    } catch (mouseError) {
+                        // Even mouse movement failed, skip to click or return
+                        this.bot.log(this.bot.isMobile, 'URL-REWARD', 'Mouse movement also failed, skipping hover simulation', 'warn');
+                        //screenlog
+                        const timestamp = new Date().toISOString().replace(/[:.]/g, '-'); 
+                        const screenshotPath = `./url_rewards_hover_mouse_movement_failed_${timestamp}.png`;
+                        await page.screenshot({ path: screenshotPath });
+                    }
+                }
             }
             await this.bot.utils.wait(this.bot.utils.randomNumber(1000, 2000));
             
@@ -332,6 +360,10 @@ export class UrlReward extends Workers {
 
         } catch (error) {
             this.bot.log(this.bot.isMobile, 'URL-REWARD-CLICK', 'An error occurred:' + error, 'error');
+            //screenlog
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-'); 
+            const screenshotPath = `./url_rewards_error_occurred_${timestamp}.png`;
+            await page.screenshot({ path: screenshotPath });
         }
     }
 
