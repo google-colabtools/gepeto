@@ -4,7 +4,7 @@ import { newInjectedContext } from 'fingerprint-injector'
 import { FingerprintGenerator } from 'fingerprint-generator'
 
 // Built-in
-import * as fs from 'fs';
+import { existsSync } from 'fs'
 
 // Internals
 import { MicrosoftRewardsBot } from '../index'
@@ -61,6 +61,20 @@ class Browser {
             // Verifica se a variável de ambiente EDGE_ENABLED está definida como '1'
             if (process.env.EDGE_ENABLED === '1') {
                 launchOptions.channel = 'msedge' // Uses Edge instead of chrome
+            }
+
+            // Verifica se está em ambiente Alpine e usa executable path customizado
+            if (process.env.ALPINE === '1') {
+                const chromeBin = process.env.CHROME_BIN
+                
+                if (chromeBin && existsSync(chromeBin)) {
+                    launchOptions.executablePath = chromeBin
+                    // Remove channel quando usando executable path customizado
+                    delete launchOptions.channel
+                    this.bot.log(this.bot.isMobile, 'BROWSER', `Usando executável customizado para Alpine: ${chromeBin}`)
+                } else {
+                    this.bot.log(this.bot.isMobile, 'BROWSER', 'ALPINE=1 detectado mas CHROME_BIN não está definido ou o arquivo não existe.', 'warn')
+                }
             }
 
             browser = await playwright.chromium.launch(launchOptions)
