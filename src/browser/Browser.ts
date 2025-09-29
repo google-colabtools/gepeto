@@ -29,43 +29,51 @@ class Browser {
     }
 
     async createBrowser(proxy: AccountProxy, email: string): Promise<BrowserContext> {
-        const getBrowserPath = () => {
-        const thoriumPath = process.env.THORIUM_BIN;
-        const chromePath = process.env.CHROME_BIN;
-        const fallbackPath = '/usr/bin/chromium';
-
-        if (thoriumPath && fs.existsSync(thoriumPath)) {
-            console.log(`Usando THORIUM_BIN: ${thoriumPath}`);
-            return thoriumPath;
+        // Optional automatic browser installation (set AUTO_INSTALL_BROWSERS=1)
+        if (process.env.AUTO_INSTALL_BROWSERS === '1') {
+            try {
+                // Dynamically import child_process to avoid overhead otherwise
+                const { execSync } = await import('child_process') as any
+                execSync('npx playwright install chromium', { stdio: 'ignore' })
+            } catch { /* silent */ }
         }
 
-        if (chromePath && fs.existsSync(chromePath)) {
-            console.log(`THORIUM_BIN não encontrado. Usando CHROME_BIN: ${chromePath}`);
-            return chromePath;
-        }
+        let browser: any
+        try {
+            const launchOptions: any = {
+                headless: this.bot.config.headless,
+                ...(proxy.url && { proxy: { username: proxy.username, password: proxy.password, server: `${proxy.url}:${proxy.port}` } }),
+                args: [
+                    '--disable-background-networking',
+                    '--test-type', // Test mode
+                    '--disable-quic', // Disable QUIC connection
+                    '--no-first-run', // Skip first run check
+                    '--blink-settings=imagesEnabled=false', // Disable image loading
+                    '--no-sandbox', // Disable sandbox mode
+                    '--mute-audio', // Disable audio
+                    '--disable-setuid-sandbox', // Disable setuid sandbox
+                    '--ignore-certificate-errors', // Ignore all certificate errors
+                    '--ignore-certificate-errors-spki-list', // Ignore certificate errors for specified SPKI list
+                    '--ignore-ssl-errors', // Ignore SSL errors
+                ]
+            }
 
-        console.log(`Nenhum dos envs encontrados ou válidos. Usando fallback: ${fallbackPath}`);
-        return fallbackPath;
-        };
-        
-        const browser = await playwright.chromium.launch({
-            executablePath: getBrowserPath(),
-            headless: this.bot.config.headless,
-            ...(proxy.url && { proxy: { username: proxy.username, password: proxy.password, server: `${proxy.url}:${proxy.port}` } }),
-            args: [
-                '--disable-background-networking',
-                '--test-type', // Test mode
-                '--disable-quic', // Disable QUIC connection
-                '--no-first-run', // Skip first run check
-                '--blink-settings=imagesEnabled=false', // Disable image loading
-                '--no-sandbox', // Disable sandbox mode
-                '--mute-audio', // Disable audio
-                '--disable-setuid-sandbox', // Disable setuid sandbox
-                '--ignore-certificate-errors', // Ignore all certificate errors
-                '--ignore-certificate-errors-spki-list', // Ignore certificate errors for specified SPKI list
-                '--ignore-ssl-errors', // Ignore SSL errors
-            ]
-        })
+            // Verifica se a variável de ambiente EDGE_ENABLED está definida como '1'
+            if (process.env.EDGE_ENABLED === '1') {
+                launchOptions.channel = 'msedge' // Uses Edge instead of chrome
+            }
+
+            browser = await playwright.chromium.launch(launchOptions)
+        } catch (e: any) {
+            const msg = (e instanceof Error ? e.message : String(e))
+            // Common missing browser executable guidance
+            if (/Executable doesn't exist/i.test(msg)) {
+                this.bot.log(this.bot.isMobile, 'BROWSER', 'Chromium not installed for Playwright. Run: "npx playwright install chromium" (or set AUTO_INSTALL_BROWSERS=1 to auto attempt).', 'error')
+            } else {
+                this.bot.log(this.bot.isMobile, 'BROWSER', 'Failed to launch browser: ' + msg, 'error')
+            }
+            throw e
+        }
 
         const sessionData = await loadSessionData(this.bot.config.sessionPath, email, this.bot.isMobile, this.bot.config.saveFingerprint)
 
